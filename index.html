@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 智能图生视频工作台</title>
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧边导航栏 / Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+        </div>
+        <div class="brand-text">
+          <h2>AI Video Studio</h2>
+          <span>Enterprise Portal</span>
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" id="nav-btn-generator">
+          <i class="fa-solid fa-video"></i>
+          <span>视频生成</span>
+        </a>
+        <a href="#" class="nav-item" id="nav-btn-history">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>生成历史</span>
+        </a>
+        <a href="#" class="nav-item" id="nav-btn-settings">
+          <i class="fa-solid fa-sliders"></i>
+          <span>配置设置</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="avatar">
+            <i class="fa-solid fa-user-tie"></i>
+          </div>
+          <div class="user-info">
+            <span class="username">员工工作舱</span>
+            <span class="role">创意制作组</span>
+          </div>
+        </div>
+        <div class="credits-card">
+          <div class="credits-header">
+            <span>可用 API 额度</span>
+            <i class="fa-solid fa-coins font-glow"></i>
+          </div>
+          <div class="credits-val" id="credit-display">47,995</div>
+          <div class="credits-progress-bar">
+            <div class="progress" style="width: 94%;"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主工作区 / Main Workspace -->
+    <main class="main-content">
+      <!-- 顶部信息栏 / Top Header -->
+      <header class="top-header">
+        <div class="page-title">
+          <h1>图生视频 (Image to Video)</h1>
+          <p>上传图片、输入提示词，让静态图像焕发新生</p>
+        </div>
+        <div class="connection-status">
+          <span class="status-dot online"></span>
+          <span class="status-text">视频服务已连接</span>
+        </div>
+      </header>
+
+      <!-- 工作台核心面板 / Studio Panel -->
+      <section class="studio-panel" id="section-generator">
+        <!-- 左侧：控制输入区 / Control Panel -->
+        <div class="panel-card input-panel">
+          <form id="generator-form">
+            
+            <!-- 1. 图片上传 / Image Uploader -->
+            <div class="form-group">
+              <label class="form-label">
+                <span>1. 上传参考图</span>
+                <span class="label-desc">支持 JPG, PNG, WEBP格式</span>
+              </label>
+              <div class="upload-container" id="drop-zone">
+                <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+                <div class="upload-placeholder" id="upload-placeholder">
+                  <div class="upload-icon">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                  </div>
+                  <h3>拖拽图片至此处，或 <span>点击上传</span></h3>
+                  <p>建议比例 16:9 或 9:16，文件大小不超过 10MB</p>
+                </div>
+                <div class="upload-preview-container" id="upload-preview-container" style="display: none;">
+                  <img src="" id="upload-preview-img" alt="Preview">
+                  <button type="button" class="remove-btn" id="remove-image-btn" title="清除图片">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. 提示词输入 / Text Prompt -->
+            <div class="form-group">
+              <label class="form-label" for="prompt-input">
+                <span>2. 动态提示词 (Prompt)</span>
+                <span class="label-desc">描述您想让画面产生怎样的运动</span>
+              </label>
+              <textarea id="prompt-input" placeholder="例如：镜头缓慢推近，树叶在微风中轻轻摇曳，柔和的阳光洒在水面上..." required></textarea>
+              <div class="prompt-suggestions">
+                <span class="suggestion-tag" data-text="镜头缓慢前推，主体细节被放大，周围伴随柔和的虚化效果">镜头推进</span>
+                <span class="suggestion-tag" data-text="环绕主体进行 360 度低速旋转，展现宏伟的三维空间感">360度环绕</span>
+                <span class="suggestion-tag" data-text="角色面部带出柔和的微笑，微风吹拂发丝，背景有落叶飘下">自然微动</span>
+                <span class="suggestion-tag" data-text="慢镜头下雨滴落在水洼中泛起层层涟漪，水花四溅">慢动作水花</span>
+              </div>
+            </div>
+
+            <!-- 3. 参数配置 / Parameters -->
+            <div class="parameters-grid">
+              <!-- 模型选择 -->
+              <div class="form-group">
+                <label class="form-label" for="model-select">核心生成模型</label>
+                <div class="select-wrapper">
+                  <select id="model-select">
+                    <option value="seedance_2_0">Seedance 2.0 (精细画质 - 消耗12点)</option>
+                    <option value="seedance_2_0_fast">Seedance 2.0 Fast (速度优先 - 消耗8点)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 模式选择 -->
+              <div class="form-group">
+                <label class="form-label" for="mode-select">运动控制模式</label>
+                <div class="select-wrapper">
+                  <select id="mode-select">
+                    <option value="omni_reference">Omni Reference (全景自适应参考)</option>
+                    <option value="first_last_frames">First-Last Frames (首尾帧过渡 - 需双图)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 画面比例 -->
+              <div class="form-group full-width">
+                <label class="form-label">画面纵横比</label>
+                <div class="ratio-selector-grid">
+                  <button type="button" class="ratio-btn active" data-ratio="16:9" id="ratio-16-9">
+                    <div class="ratio-box r-16-9"></div>
+                    <span>16:9 横屏</span>
+                  </button>
+                  <button type="button" class="ratio-btn" data-ratio="9:16" id="ratio-9-16">
+                    <div class="ratio-box r-9-16"></div>
+                    <span>9:16 竖屏</span>
+                  </button>
+                  <button type="button" class="ratio-btn" data-ratio="1:1" id="ratio-1-1">
+                    <div class="ratio-box r-1-1"></div>
+                    <span>1:1 正方</span>
+                  </button>
+                  <button type="button" class="ratio-btn" data-ratio="4:3" id="ratio-4-3">
+                    <div class="ratio-box r-4-3"></div>
+                    <span>4:3 经典</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 生成时长 -->
+              <div class="form-group full-width">
+                <div class="slider-label">
+                  <label class="form-label">视频时长 (秒)</label>
+                  <span class="slider-value" id="duration-val">5s</span>
+                </div>
+                <input type="range" id="duration-slider" min="4" max="15" value="5" class="slider">
+                <div class="slider-ticks">
+                  <span>4s</span>
+                  <span>6s</span>
+                  <span>8s</span>
+                  <span>10s</span>
+                  <span>12s</span>
+                  <span>15s</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 生成按钮 -->
+            <button type="submit" class="submit-btn" id="generate-submit-btn">
+              <span class="btn-text">立即生成视频</span>
+              <span class="btn-icon"><i class="fa-solid fa-play"></i></span>
+            </button>
+
+          </form>
+        </div>
+
+        <!-- 右侧：工作预览区 / Preview Area -->
+        <div class="panel-card preview-panel">
+          <div class="panel-header">
+            <h3>实时生成预览</h3>
+            <span class="preview-badge" id="preview-status-badge">Idle</span>
+          </div>
+
+          <div class="preview-container">
+            <!-- 1. 未生成状态 / Idle State -->
+            <div class="preview-state state-idle" id="preview-state-idle">
+              <div class="pulse-ring">
+                <i class="fa-solid fa-photo-film"></i>
+              </div>
+              <h4>等待生成指令</h4>
+              <p>请在左侧配置您的参考图与提示词，然后点击下方“立即生成视频”</p>
+            </div>
+
+            <!-- 2. 生成中状态 / Processing State -->
+            <div class="preview-state state-processing" id="preview-state-processing" style="display: none;">
+              <div class="loader-circle"></div>
+              <div class="processing-steps">
+                <div class="step-item active" id="step-upload">
+                  <span class="step-dot"></span>
+                  <span class="step-name">图片上传与云端托管...</span>
+                  <span class="step-percent" id="upload-percent">0%</span>
+                </div>
+                <div class="step-item" id="step-api">
+                  <span class="step-dot"></span>
+                  <span class="step-name">提交任务队列...</span>
+                </div>
+                <div class="step-item" id="step-render">
+                  <span class="step-dot"></span>
+                  <span class="step-name">云端 GPU 视频渲染渲染中...</span>
+                  <span class="step-percent" id="render-percent">0%</span>
+                </div>
+              </div>
+              <div class="progress-bar-container">
+                <div class="main-progress-bar" id="generation-progress"></div>
+              </div>
+              <span class="time-estimate">预计还需：<strong id="time-left">15秒</strong></span>
+              <button type="button" class="cancel-btn" id="cancel-task-btn">
+                <i class="fa-solid fa-circle-stop"></i> 中断生成
+              </button>
+            </div>
+
+            <!-- 3. 生成成功状态 / Success State -->
+            <div class="preview-state state-success" id="preview-state-success" style="display: none;">
+              <div class="video-wrapper" id="video-wrapper-element">
+                <!-- HTML5 Video Player -->
+                <video id="output-video-player" controls preload="auto" width="100%">
+                  <source src="" type="video/mp4">
+                  您的浏览器不支持 HTML5 视频播放。
+                </video>
+              </div>
+              <div class="success-actions">
+                <a href="#" class="action-btn download-btn" id="download-video-btn" download>
+                  <i class="fa-solid fa-download"></i> 下载 MP4 视频
+                </a>
+                <button type="button" class="action-btn secondary-btn" id="regenerate-btn">
+                  <i class="fa-solid fa-arrows-rotate"></i> 重新生成
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 历史记录面板 / History Panel -->
+      <section class="history-panel" id="section-history" style="display: none;">
+        <div class="panel-header">
+          <div class="header-left">
+            <h2>历史生成记录</h2>
+            <p>已归档的视频列表，可随时查看和下载</p>
+          </div>
+          <button class="clear-history-btn" id="clear-all-history-btn">
+            <i class="fa-solid fa-trash-can"></i> 清空本地历史
+          </button>
+        </div>
+
+        <div class="history-grid" id="history-items-grid">
+          <!-- 历史卡片由 JS 动态生成 -->
+        </div>
+      </section>
+
+      <!-- 设置面板 / Settings Panel -->
+      <section class="settings-panel" id="section-settings" style="display: none;">
+        <div class="panel-card settings-card">
+          <h2>系统后台与 API 配置</h2>
+          <p class="subtitle">这些配置项通常由管理员管理。在此修改将更新系统调用逻辑。</p>
+          <hr class="divider">
+
+          <form id="settings-form">
+            <div class="form-group">
+              <label class="form-label" for="setting-api-url">
+                <span>视频 API Base URL</span>
+                <span class="label-desc">API 服务器网关地址</span>
+              </label>
+              <input type="url" id="setting-api-url" value="https://api.example.com/api" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="setting-api-key">
+                <span>API Key (当前已混淆)</span>
+                <span class="label-desc">用于向视频服务鉴权。部署到服务器时请将其写在后端 .env 中</span>
+              </label>
+              <div class="input-with-icon">
+                <input type="password" id="setting-api-key" value="sk-••••••••••••••••••••••••" placeholder="sk-...">
+                <button type="button" class="toggle-password-btn" id="toggle-key-visibility">
+                  <i class="fa-solid fa-eye-slash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="setting-storage-type">
+                <span>图片托管存储介质</span>
+                <span class="label-desc">图生视频需要先将本地文件转换成公网链接</span>
+              </label>
+              <div class="select-wrapper">
+                <select id="setting-storage-type">
+                  <option value="local">本地服务器托管 (/uploads/ 临时静态目录)</option>
+                  <option value="oss">阿里云 OSS 存储（高并发高可用）</option>
+                  <option value="cos">腾讯云 COS 存储</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="save-settings-btn" id="save-settings-btn">
+              <i class="fa-solid fa-check"></i> 保存当前配置
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

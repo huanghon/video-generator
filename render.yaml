@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: video-generator
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run db:deploy && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: LOOVA_API_MOCK
+        value: "true"
+      - key: STORAGE_PROVIDER
+        value: cloudinary
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: SETUP_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: video-generator-db
+          property: connectionString
+
+databases:
+  - name: video-generator-db
+    plan: free

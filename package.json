@@ -1,0 +1,39 @@
+{
+  "name": "video-generator",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:init": "prisma generate && prisma db push && prisma db seed",
+    "db:deploy": "prisma generate && prisma db push",
+    "db:seed": "prisma db seed",
+    "lint": "next lint"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^2.4.0",
+    "axios": "^1.17.0",
+    "bcryptjs": "^3.0.3",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "prisma": "^6.19.3",
+    "typescript": "^5.6.3"
+  }
+}
