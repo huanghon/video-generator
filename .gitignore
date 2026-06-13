@@ -8,5 +8,11 @@ node_modules
 *.log
 next-start.*.log
 
+/uploads/
+
 prisma/*.db
 prisma/*.db-journal
+
+.codex-tmp/
+tsconfig.tsbuildinfo
+app/uploads/

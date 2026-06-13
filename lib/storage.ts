@@ -1,9 +1,10 @@
 import path from 'path';
 import crypto from 'crypto';
+import { mkdir, writeFile } from 'fs/promises';
 import { put } from '@vercel/blob';
 
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
-type StorageProvider = 'auto' | 'cloudinary' | 'vercel-blob';
+type StorageProvider = 'auto' | 'cloudinary' | 'vercel-blob' | 'local';
 
 function sanitizeBaseName(filename: string) {
   return filename
@@ -15,7 +16,7 @@ function sanitizeBaseName(filename: string) {
 
 function getStorageProvider(): StorageProvider {
   const provider = process.env.STORAGE_PROVIDER || 'auto';
-  if (provider === 'cloudinary' || provider === 'vercel-blob') {
+  if (provider === 'cloudinary' || provider === 'vercel-blob' || provider === 'local') {
     return provider;
   }
   return 'auto';
@@ -79,6 +80,36 @@ async function uploadToVercelBlob(file: File) {
   return blob.url;
 }
 
+function getLocalUploadRoot() {
+  return path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+}
+
+function getLocalUploadUrl(filename: string) {
+  const publicBaseUrl = process.env.PUBLIC_UPLOAD_BASE_URL?.replace(/\/$/, '');
+  if (publicBaseUrl) {
+    return `${publicBaseUrl}/uploads/${filename}`;
+  }
+
+  if (process.env.VIDEO_PROVIDER_MOCK === 'false') {
+    throw new Error('使用本地上传并真实生成时，请配置 PUBLIC_UPLOAD_BASE_URL');
+  }
+
+  return `/uploads/${filename}`;
+}
+
+async function uploadToLocal(file: File) {
+  const extension = path.extname(file.name || '').toLowerCase() || '.bin';
+  const basename = sanitizeBaseName(file.name || 'asset') || 'asset';
+  const filename = `${Date.now()}-${crypto.randomUUID()}-${basename}${extension}`;
+  const uploadRoot = getLocalUploadRoot();
+  const targetPath = path.join(uploadRoot, filename);
+
+  await mkdir(uploadRoot, { recursive: true });
+  await writeFile(targetPath, Buffer.from(await file.arrayBuffer()));
+
+  return getLocalUploadUrl(filename);
+}
+
 export async function uploadReferenceAssetForVideo(file: File) {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error('素材大小不能超过 10MB');
@@ -94,6 +125,10 @@ export async function uploadReferenceAssetForVideo(file: File) {
     return uploadToVercelBlob(file);
   }
 
+  if (provider === 'local') {
+    return uploadToLocal(file);
+  }
+
   if (hasCloudinaryConfig()) {
     return uploadToCloudinary(file);
   }
@@ -102,11 +137,15 @@ export async function uploadReferenceAssetForVideo(file: File) {
     return uploadToVercelBlob(file);
   }
 
+  if (process.env.UPLOAD_DIR || process.env.PUBLIC_UPLOAD_BASE_URL) {
+    return uploadToLocal(file);
+  }
+
   if (process.env.VIDEO_PROVIDER_MOCK !== 'false') {
     return null;
   }
 
-  throw new Error('缺少素材存储配置，请配置 Cloudinary 或 Vercel Blob');
+  throw new Error('缺少素材存储配置，请配置 local、Cloudinary 或 Vercel Blob');
 }
 
 export async function uploadImageForVideo(file: File) {

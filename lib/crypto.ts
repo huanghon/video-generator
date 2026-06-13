@@ -3,6 +3,13 @@ import nodeCrypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
 
+export class SecretDecryptionError extends Error {
+  constructor() {
+    super('API Key 解密失败，请检查 KEY_ENCRYPTION_SECRET 是否与保存 Key 时一致，或在后台重新保存该 Key');
+    this.name = 'SecretDecryptionError';
+  }
+}
+
 function getSecretKey() {
   const secret = process.env.KEY_ENCRYPTION_SECRET;
   if (!secret) {
@@ -36,15 +43,24 @@ export function decryptSecret(payload: string) {
     throw new Error('API Key 密文格式不正确');
   }
 
-  const decipher = nodeCrypto.createDecipheriv(
-    ALGORITHM,
-    getSecretKey(),
-    Buffer.from(ivText, 'base64url')
-  );
-  decipher.setAuthTag(Buffer.from(authTagText, 'base64url'));
+  const secretKey = getSecretKey();
 
-  return Buffer.concat([
-    decipher.update(Buffer.from(encryptedText, 'base64url')),
-    decipher.final()
-  ]).toString('utf8');
+  try {
+    const decipher = nodeCrypto.createDecipheriv(
+      ALGORITHM,
+      secretKey,
+      Buffer.from(ivText, 'base64url')
+    );
+    decipher.setAuthTag(Buffer.from(authTagText, 'base64url'));
+
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedText, 'base64url')),
+      decipher.final()
+    ]).toString('utf8');
+  } catch (error) {
+    if (error instanceof SecretDecryptionError) {
+      throw error;
+    }
+    throw new SecretDecryptionError();
+  }
 }

@@ -25,33 +25,23 @@ type VideoTaskStatusResult = {
 };
 
 const DEFAULT_PROVIDER_BASE_URL = 'https://api.loova.ai/api';
-const DEFAULT_IMAGE_PROVIDER_BASE_URL = 'https://loova.ai/loovaai-api';
 const MOCK_VIDEO_URL =
   'https://assets.mixkit.co/videos/preview/mixkit-cyberpunk-neon-city-streets-at-night-42289-large.mp4';
 const SUPPORTED_MODELS = new Set(['seedance_2_0', 'seedance_2_0_fast']);
 const SUPPORTED_RATIOS = new Set(['21:9', '16:9', '4:3', '1:1', '3:4', '9:16']);
 const SUPPORTED_FUNCTION_MODES = new Set(['first_last_frames', 'omni_reference']);
-const WEB_TASK_TYPES =
-  't2v,i2v,tl2v,v2v,cs2v,ref2v,m2v,cc2v,k2v,h2v,v2v_remove_element,v2v_add_element,v2v_change_bg,v2v_add_effect,v2v_style_transfer,v2v_character_style,v2v_hair_style,v2v_angle_control,v2v_upscale,product_ads_generator,viral_ads_clone_video';
 
 function shouldUseMock() {
   return process.env.VIDEO_PROVIDER_MOCK !== 'false';
 }
 
-function getProviderBaseUrl(credential: ApiKeyCredential, fallbackBaseUrl = DEFAULT_PROVIDER_BASE_URL) {
-  const baseUrl = credential.baseUrl || process.env.VIDEO_PROVIDER_BASE_URL || fallbackBaseUrl;
+function getProviderBaseUrl(credential: ApiKeyCredential) {
+  const baseUrl = credential.baseUrl || process.env.VIDEO_PROVIDER_BASE_URL || DEFAULT_PROVIDER_BASE_URL;
   return baseUrl.replace(/\/$/, '');
 }
 
 function normalizeModel(model?: string | null) {
   return model && SUPPORTED_MODELS.has(model) ? model : 'seedance_2_0';
-}
-
-function normalizeWebModel(model?: string | null) {
-  if (model === 'seedance_2_0_fast') return 'seedance2_0_fast';
-  if (model === 'seedance_2_0') return 'seedance2_0';
-  if (model === 'seedance2_0_fast' || model === 'seedance2_0') return model;
-  return 'seedance2_0';
 }
 
 function normalizeRatio(ratio?: string | null) {
@@ -69,185 +59,77 @@ function normalizeFunctionMode(functionMode?: string | null) {
     : 'omni_reference';
 }
 
+function normalizeProviderMessage(message?: string | null) {
+  if (!message) return '视频供应商请求失败';
+
+  if (/insufficient credits/i.test(message)) {
+    return '生成服务额度不足，请联系管理员处理';
+  }
+
+  if (/parallel task limit|concurrent task limit/i.test(message)) {
+    return '当前生成队列繁忙，请稍后再试';
+  }
+
+  if (/authentication|unauthorized|invalid api key/i.test(message)) {
+    return '生成服务配置异常，请联系管理员处理';
+  }
+
+  return message;
+}
+
 function getProviderError(error: unknown) {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { message?: string } | undefined;
-    return data?.message || error.message || '视频供应商请求失败';
+    const data = error.response?.data as { message?: string | null; trace_id?: string | null } | undefined;
+    const message = normalizeProviderMessage(data?.message || error.message);
+    return data?.trace_id ? `${message} (trace_id: ${data.trace_id})` : message;
   }
-  return error instanceof Error ? error.message : '视频供应商请求失败';
+  return error instanceof Error ? normalizeProviderMessage(error.message) : '视频供应商请求失败';
 }
 
 function assertSuccessfulProviderResponse(responseData: any) {
-  if (responseData?.code && responseData.code !== 200) {
-    throw new Error(responseData.message || '视频供应商返回失败');
+  if (typeof responseData?.code === 'number' && responseData.code !== 200) {
+    throw new Error(normalizeProviderMessage(responseData.message || '视频供应商返回失败'));
   }
 }
 
-function createWebMedia(url: string, type: 'image' | 'video') {
+function buildCreatePayload(params: CreateSeedanceVideoTaskParams) {
+  const functionMode = normalizeFunctionMode(params.functionMode);
+  const imageUrls = params.imageUrls || [];
+
   return {
-    file_type: type,
-    url,
-    name: url,
-    file_url: url,
-    file_key: url,
-    type,
-    duration: 0,
-    extra: {
-      duration: 0,
-      file_url: url,
-      file_key: url,
-      type
-    }
+    model: normalizeModel(params.model),
+    prompt: params.prompt,
+    function_mode: functionMode,
+    ratio: normalizeRatio(params.aspectRatio),
+    duration: normalizeDuration(params.duration),
+    image_urls: functionMode === 'first_last_frames' ? imageUrls.slice(0, 2) : imageUrls.slice(0, 9),
+    audio_urls: (params.audioUrls || []).slice(0, 3),
+    video_urls: (params.videoUrls || []).slice(0, 3)
   };
 }
 
-function findTaskRecord(value: unknown, taskId: string): any | null {
-  if (!value || typeof value !== 'object') return null;
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findTaskRecord(item, taskId);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  const record = value as Record<string, any>;
-  if (
-    record.id === taskId ||
-    record.task_id === taskId ||
-    record.record_id === taskId ||
-    record.task_record_id === taskId
-  ) {
-    return record;
-  }
-
-  for (const item of Object.values(record)) {
-    const found = findTaskRecord(item, taskId);
-    if (found) return found;
-  }
-
-  return null;
+function getCreatedTaskId(responseData: any) {
+  return responseData?.data?.task_id || responseData?.task_id;
 }
 
-function findVideoUrl(value: unknown): string | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findVideoUrl(item);
-      if (found) return found;
-    }
-    return undefined;
-  }
-
-  const record = value as Record<string, any>;
-  const candidate =
-    record.video_url ||
-    record.videoUrl ||
-    record.output_url ||
-    record.outputUrl ||
-    record.url ||
-    record.file_url ||
-    record.fileUrl;
-
-  if (typeof candidate === 'string' && /^https?:\/\//.test(candidate)) {
-    return candidate;
-  }
-
-  for (const item of Object.values(record)) {
-    const found = findVideoUrl(item);
-    if (found) return found;
-  }
-
-  return undefined;
-}
-
-function mapWebTaskStatus(record: any): VideoTaskStatusResult['status'] {
-  const status = String(
-    record?.status ||
-      record?.task_status ||
-      record?.state ||
-      record?.generate_status ||
-      record?.progress_status ||
-      ''
-  ).toLowerCase();
+function mapProviderTaskStatus(data: any): VideoTaskStatusResult['status'] {
+  const status = String(data?.result?.status || data?.status || '').toLowerCase();
 
   if (
     ['success', 'succeeded', 'complete', 'completed', 'finished', 'done'].includes(status) ||
-    Number(record?.status) === 2 ||
-    Number(record?.task_status) === 2
+    (data?.result?.video_url && !data?.result?.error_message)
   ) {
     return 'success';
   }
 
   if (
     ['failed', 'fail', 'error', 'canceled', 'cancelled'].includes(status) ||
-    Number(record?.status) === 3 ||
-    Number(record?.task_status) === 3
+    Boolean(data?.result?.error_message)
   ) {
     return 'failed';
   }
 
   return 'processing';
-}
-
-async function getWebTaskStatus(
-  apiTaskId: string,
-  credential: ApiKeyCredential
-): Promise<VideoTaskStatusResult> {
-  const response = await axios.get(
-    `${getProviderBaseUrl(credential, DEFAULT_IMAGE_PROVIDER_BASE_URL)}/task_records/list_paged`,
-    {
-      params: {
-        page_num: 1,
-        page_size: 20,
-        task_types: WEB_TASK_TYPES
-      },
-      headers: {
-        Authorization: `Bearer ${credential.apiKey}`,
-        Accept: 'application/json',
-        'x-app-id': process.env.VIDEO_PROVIDER_APP_ID || '52000'
-      }
-    }
-  );
-
-  assertSuccessfulProviderResponse(response.data);
-
-  const record = findTaskRecord(response.data, apiTaskId);
-  if (!record) {
-    return {
-      status: 'processing',
-      rawResponse: response.data
-    };
-  }
-
-  const status = mapWebTaskStatus(record);
-  if (status === 'success') {
-    return {
-      status,
-      videoUrl: findVideoUrl(record),
-      rawResponse: response.data
-    };
-  }
-
-  if (status === 'failed') {
-    return {
-      status,
-      errorMessage:
-        record?.error_message ||
-        record?.errorMessage ||
-        record?.message ||
-        record?.fail_reason ||
-        '视频生成失败',
-      rawResponse: response.data
-    };
-  }
-
-  return {
-    status: 'processing',
-    rawResponse: response.data
-  };
 }
 
 async function createSeedanceVideoTask(
@@ -263,28 +145,25 @@ async function createSeedanceVideoTask(
   try {
     const response = await axios.post(
       `${getProviderBaseUrl(credential)}/v1/video/seedance-2`,
-      {
-        model: normalizeModel(params.model),
-        prompt: params.prompt,
-        function_mode: normalizeFunctionMode(params.functionMode),
-        ratio: normalizeRatio(params.aspectRatio),
-        duration: normalizeDuration(params.duration),
-        image_urls: params.imageUrls || [],
-        audio_urls: params.audioUrls || [],
-        video_urls: params.videoUrls || []
-      },
+      buildCreatePayload(params),
       {
         headers: {
           Authorization: `Bearer ${credential.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
         }
       }
     );
 
     assertSuccessfulProviderResponse(response.data);
 
+    const apiTaskId = getCreatedTaskId(response.data);
+    if (!apiTaskId) {
+      throw new Error(response.data?.message || '视频供应商未返回 task_id');
+    }
+
     return {
-      apiTaskId: response.data?.data?.task_id,
+      apiTaskId,
       rawResponse: response.data
     };
   } catch (error) {
@@ -305,59 +184,19 @@ export async function createImageToVideoTask(
       ? [params.imageUrl]
       : [];
 
-  if (shouldUseMock()) {
-    return {
-      apiTaskId: `mock_${Date.now()}`
-    };
-  }
-
-  try {
-    const mediaList = [
-      ...imageUrls.map((url) => createWebMedia(url, 'image')),
-      ...(params.videoUrls || []).map((url) => createWebMedia(url, 'video'))
-    ];
-
-    // TODO: The captured img2vid endpoint does not show audio reference handling;
-    // keep audio files uploaded in the app, but do not submit them until verified.
-    const response = await axios.post(
-      `${getProviderBaseUrl(credential, DEFAULT_IMAGE_PROVIDER_BASE_URL)}/videos/img2vid`,
-      {
-        v_model: normalizeWebModel(params.model),
-        out_number: 1,
-        pay_type: 'credit',
-        prompt: params.prompt,
-        is_ref: true,
-        image_keys: [],
-        media_list: mediaList,
-        video_keys: [],
-        audio_keys: [],
-        duration: normalizeDuration(params.duration),
-        aspect_ratio: normalizeRatio(params.aspectRatio)
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${credential.apiKey}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-app-id': process.env.VIDEO_PROVIDER_APP_ID || '52000'
-        }
-      }
-    );
-
-    assertSuccessfulProviderResponse(response.data);
-
-    const apiTaskId = response.data?.data?.task_id;
-    if (!apiTaskId) {
-      throw new Error('图生视频接口未返回 task_id');
-    }
-
-    return {
-      apiTaskId,
-      rawResponse: response.data
-    };
-  } catch (error) {
-    throw new Error(getProviderError(error));
-  }
+  return createSeedanceVideoTask(
+    {
+      prompt: params.prompt,
+      model: params.model,
+      aspectRatio: params.aspectRatio,
+      duration: params.duration,
+      functionMode: params.functionMode,
+      imageUrls,
+      audioUrls: params.audioUrls || [],
+      videoUrls: params.videoUrls || []
+    },
+    credential
+  );
 }
 
 export async function createTextToVideoTask(
@@ -378,7 +217,7 @@ export async function createTextToVideoTask(
 export async function getVideoTaskStatus(
   apiTaskId: string,
   credential: ApiKeyCredential,
-  options?: { taskType?: string | null }
+  _options?: { taskType?: string | null }
 ): Promise<VideoTaskStatusResult> {
   if (apiTaskId.startsWith('mock_') || shouldUseMock()) {
     const createdAt = Number(apiTaskId.split('_')[1] || Date.now());
@@ -392,37 +231,34 @@ export async function getVideoTaskStatus(
   }
 
   try {
-    if (
-      options?.taskType === 'image-to-video' ||
-      getProviderBaseUrl(credential).includes('loovaai-api')
-    ) {
-      return getWebTaskStatus(apiTaskId, credential);
-    }
-
     const response = await axios.get(`${getProviderBaseUrl(credential)}/v1/tasks`, {
       params: { task_id: apiTaskId },
       headers: {
-        Authorization: `Bearer ${credential.apiKey}`
+        Authorization: `Bearer ${credential.apiKey}`,
+        Accept: 'application/json'
       }
     });
 
     assertSuccessfulProviderResponse(response.data);
 
     const data = response.data?.data || response.data;
-    if (data?.status === 'succeeded' || data?.status === 'success') {
+    const status = mapProviderTaskStatus(data);
+    if (status === 'success') {
       return {
-        status: 'success',
-        videoUrl: data?.result?.video_url || data?.video_url,
+        status,
+        videoUrl: data?.result?.video_url,
         rawResponse: response.data
       };
     }
-    if (data?.status === 'failed') {
+
+    if (status === 'failed') {
       return {
-        status: 'failed',
-        errorMessage: data?.result?.error_message || data?.error_message || response.data?.message || '视频生成失败',
+        status,
+        errorMessage: data?.result?.error_message || response.data?.message || '视频生成失败',
         rawResponse: response.data
       };
     }
+
     return {
       status: 'processing',
       rawResponse: response.data

@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loova.ai API 调试控制台</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    :root {
+      --bg-dark: #080710;
+      --panel-bg: rgba(18, 16, 35, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --panel-border-glow: rgba(139, 92, 246, 0.3);
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.4);
+      --accent-success: #10b981;
+      --accent-success-glow: rgba(16, 185, 129, 0.4);
+      --accent-fail: #ef4444;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-glow: rgba(255, 255, 255, 0.15);
+      --font-outfit: 'Outfit', 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e1145 0%, var(--bg-dark) 70%);
+      color: var(--text-main);
+      min-height: 100vh;
+      line-height: 1.5;
+      overflow-x: hidden;
+      padding-bottom: 60px;
+    }
+
+    /* Beautiful Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+
+    /* Container & Layout */
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Header styling */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 20px;
+      position: relative;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 150px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      font-size: 2rem;
+      background: linear-gradient(135deg, #a78bfa, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
+    }
+
+    .brand-title {
+      font-family: var(--font-outfit);
+      font-weight: 800;
+      font-size: 1.6rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #ffffff, #d8b4fe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-top: -2px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      font-size: 0.85rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      box-shadow: 0 0 8px var(--text-muted);
+    }
+
+    .status-dot.online {
+      background: var(--accent-success);
+      box-shadow: 0 0 8px var(--accent-success);
+    }
+
+    .status-dot.offline {
+      background: var(--accent-fail);
+      box-shadow: 0 0 8px var(--accent-fail);
+    }
+
+    /* Main Console Grid */
+    .console-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .console-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Glassmorphic Panel Cards */
+    .card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      margin-bottom: 24px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .card:focus-within {
+      border-color: var(--panel-border-glow);
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.1);
+    }
+
+    .card-title {
+      font-family: var(--font-outfit);
+      font-weight: 600;
+      font-size: 1.15rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 12px;
+    }
+
+    .card-title i {
+      color: var(--accent);
+      filter: drop-shadow(0 0 4px var(--accent-glow));
+    }
+
+    /* Form Fields Styling */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #e5e7eb;
+      margin-bottom: 8px;
+    }
+
+    .form-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .input-control {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      color: #ffffff;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
+    }
+
+    .input-control[readonly] {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    textarea.input-control {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    .btn:hover {
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      background: #374151;
+      color: var(--text-muted);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--panel-border);
+      color: #ffffff;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-fail), #dc2626);
+    }
+
+    .btn-danger:hover {
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
+
+    /* Profile Panel Extra */
+    .profile-info {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .profile-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+    }
+
+    .profile-item:last-child {
+      margin-bottom: 0;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    .profile-label {
+      color: var(--text-muted);
+    }
+
+    .profile-val {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .credits-val {
+      font-family: var(--font-outfit);
+      font-size: 1.3rem;
+      color: var(--accent-success);
+      font-weight: 700;
+    }
+
+    /* Main Console Workspace */
+    .workspace-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 10px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tab-btn.active {
+      color: #ffffff;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    /* Layout in generator card */
+    .generator-split {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 30px;
+    }
+
+    @media (max-width: 900px) {
+      .generator-split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .ratio-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .ratio-item {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 10px 4px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ratio-item:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .ratio-item.active {
+      border-color: var(--accent);
+      background: rgba(139, 92, 246, 0.15);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .ratio-shape {
+      border: 1px solid currentColor;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+    }
+
+    .shape-16-9 { width: 24px; height: 13.5px; }
+    .shape-9-16 { width: 13.5px; height: 24px; }
+    .shape-1-1 { width: 18px; height: 18px; }
+    .shape-4-3 { width: 22px; height: 16.5px; }
+
+    /* Live Preview Section */
+    .preview-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px dashed var(--panel-border);
+      border-radius: 12px;
+      aspect-ratio: 16/9;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .preview-box.success {
+      border-style: solid;
+      border-color: var(--panel-border);
+      aspect-ratio: auto;
+      background: #000;
+    }
+
+    .preview-placeholder-icon {
+      font-size: 2.5rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      opacity: 0.6;
+    }
+
+    .preview-placeholder-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      max-width: 250px;
+    }
+
+    /* Polling state renderer */
+    .stepper {
+      width: 100%;
+      text-align: left;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+      opacity: 0.4;
+      transition: opacity 0.3s;
+    }
+
+    .step-item.active {
+      opacity: 1;
+    }
+
+    .step-item.complete {
+      opacity: 1;
+    }
+
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .step-item.active .step-icon {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      animation: pulse 1.5s infinite alternate;
+    }
+
+    .step-item.complete .step-icon {
+      background: var(--accent-success);
+      color: #000;
+    }
+
+    .step-label {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .step-subtext {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 4px var(--accent-glow); }
+      100% { transform: scale(1.1); box-shadow: 0 0 12px var(--accent); }
+    }
+
+    .progress-bar-wrap {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+      margin-top: 15px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    /* Video player success */
+    .video-player {
+      width: 100%;
+      display: block;
+      border-radius: 8px;
+      max-height: 400px;
+    }
+
+    .video-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      width: 100%;
+    }
+
+    /* History Grid List */
+    .history-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+
+    .history-section-header h2 {
+      font-family: var(--font-outfit);
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .history-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .history-card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .card-media-preview {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .card-media-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-media-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .play-badge {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(139, 92, 246, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: #ffffff;
+      opacity: 0.8;
+      transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    .card-media-preview:hover .play-badge {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    .card-body {
+      padding: 16px;
+    }
+
+    .card-prompt-text {
+      font-size: 0.82rem;
+      color: #e5e7eb;
+      font-weight: 500;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 12px;
+      height: 38px;
+    }
+
+    .card-meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .meta-tag {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .meta-tag.model-tag {
+      background: rgba(139, 92, 246, 0.1);
+      color: #c084fc;
+      border-color: rgba(139, 92, 246, 0.2);
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 12px;
+    }
+
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .badge.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge.failed {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge.processing {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      animation: flash 1s infinite alternate;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    /* Terminal logs */
+    .terminal-logs {
+      font-family: var(--font-mono);
+      background: #040308;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.8rem;
+      color: #10b981;
+      min-height: 120px;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 12px;
+    }
+
+    .log-line {
+      margin-bottom: 4px;
+    }
+    .log-err { color: #f87171; }
+    .log-info { color: #60a5fa; }
+    .log-warn { color: #fbbf24; }
+    .log-success { color: #34d399; }
+
+    /* Modal for big video preview */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      max-width: 900px;
+      width: 100%;
+      position: relative;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: -40px;
+      right: 0;
+      color: #fff;
+      font-size: 1.5rem;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      outline: none;
+    }
+
+    .modal video {
+      width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand-section">
+        <div class="brand-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+        <div>
+          <h1 class="brand-title">Loova.ai API</h1>
+          <div class="brand-subtitle">Developer Direct Control Panel</div>
+        </div>
+      </div>
+      <div class="status-badge">
+        <span class="status-dot" id="conn-dot"></span>
+        <span id="conn-status">正在检查鉴权 token...</span>
+      </div>
+    </header>
+
+    <!-- Main Console Grid -->
+    <div class="console-grid">
+      
+      <!-- Left Sidebar: Configuration & User Info -->
+      <aside>
+        <!-- Token & Config Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-key"></i> 接口授权与配置</h3>
+          
+          <div class="form-group">
+            <label class="form-label" for="connection-mode">接口连接模式</label>
+            <select id="connection-mode" class="input-control" style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3);">
+              <option value="proxy" selected>Node 代理模式 (防跨域，需运行 Node 服务)</option>
+              <option value="direct">浏览器直连模式 (需浏览器允许 CORS 跨域)</option>
+            </select>
+            <div class="form-desc" id="mode-desc">推荐使用【Node 代理模式】，通过本地 Node 服务中转请求，可完美避开浏览器跨域限制。</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="auth-token">Bearer Token (JWT)</label>
+            <input type="password" id="auth-token" class="input-control" placeholder="输入 Loova.ai 的 Bearer JWT Token..." value="">
+            <div class="form-desc">粘贴抓包获取的 authorization 头部中的 JWT 字符串。</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="app-id">x-app-id</label>
+            <input type="text" id="app-id" class="input-control" placeholder="52000" value="52000">
+          </div>
+
+          <button id="btn-save-auth" class="btn"><i class="fa-solid fa-floppy-disk"></i> 保存并载入个人资料</button>
+
+          <!-- User Profile Display -->
+          <div class="profile-info" id="profile-container" style="display: none;">
+            <div class="profile-item">
+              <span class="profile-label">邮箱账号</span>
+              <span class="profile-val" id="prof-email">-</span>
+            </div>
+            <div class="profile-item">
+              <span class="profile-label">用户ID</span>
+              <span class="profile-val" id="prof-uid" style="font-family: var(--font-mono); font-size: 0.75rem;">-</span>
+            </div>
+            <div class="profile-item">
+              <span class="profile-label">可用余额 (Credits)</span>
+              <span class="profile-val credits-val" id="prof-balance">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Logs -->
+        <div class="card" style="padding-top: 18px;">
+          <h3 class="card-title" style="margin-bottom: 10px; font-size: 1rem;"><i class="fa-solid fa-terminal"></i> 运行日志</h3>
+          <div class="terminal-logs" id="terminal-logs">Waiting for authentication...</div>
+        </div>
+      </aside>
+
+      <!-- Right Panel: Generator and Tasks -->
+      <main>
+        
+        <!-- Generator Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-clapperboard"></i> 视频生成控制台</h3>
+          
+          <div class="generator-split">
+            
+            <!-- Parameters and Prompt -->
+            <div>
+              <div class="form-group">
+                <label class="form-label" for="prompt">提示词 (Prompt)</label>
+                <textarea id="prompt" class="input-control" placeholder="例如：跑步动作，主体快速奔跑，镜头保持跟随..."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="image-url">参考图链接 (Media URL)</label>
+                <input type="url" id="image-url" class="input-control" placeholder="https://res.loova.ai/uploads/...">
+                <div class="form-desc">Loova API 需使用已上传到其服务器或可公网访问的图片链接。</div>
+              </div>
+
+              <div class="input-row">
+                <div class="form-group">
+                  <label class="form-label" for="v-model">视频模型</label>
+                  <select id="v-model" class="input-control">
+                    <option value="seedance2_0_fast">Seedance 2.0 Fast (速度较快)</option>
+                    <option value="seedance2_0">Seedance 2.0 (高清渲染)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="duration">时长 (秒)</label>
+                  <select id="duration" class="input-control">
+                    <option value="5">5 秒</option>
+                    <option value="8">8 秒</option>
+                    <option value="10">10 秒</option>
+                    <option value="15">15 秒</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">画面纵横比</label>
+                <div class="ratio-grid" id="ratio-selector">
+                  <div class="ratio-item active" data-ratio="16:9">
+                    <div class="ratio-shape shape-16-9"></div>
+                    <span>16:9</span>
+                  </div>
+                  <div class="ratio-item" data-ratio="9:16">
+                    <div class="ratio-shape shape-9-16"></div>
+                    <span>9:16</span>
+                  </div>
+                  <div class="ratio-item" data-ratio="1:1">
+                    <div class="ratio-shape shape-1-1"></div>
+                    <span>1:1</span>
+                  </div>
+                  <div class="ratio-item" data-ratio="4:3">
+                    <div class="ratio-shape shape-4-3"></div>
+                    <span>4:3</span>
+                  </div>
+                </div>
+              </div>
+
+              <button id="btn-submit" class="btn" disabled><i class="fa-solid fa-play"></i> 立即提交生成 (耗费点数)</button>
+            </div>
+
+            <!-- Preview and Status -->
+            <div>
+              <label class="form-label">实时生成状态监控</label>
+              <div class="preview-box" id="preview-screen">
+                
+                <!-- Idle state -->
+                <div id="preview-state-idle" class="preview-placeholder">
+                  <i class="fa-solid fa-film preview-placeholder-icon"></i>
+                  <p class="preview-placeholder-text">配置左侧参数并点击生成，状态监控信息将在此处展开。</p>
+                </div>
+
+                <!-- Active Polling status -->
+                <div id="preview-state-active" style="display: none; width: 100%;">
+                  <div class="stepper">
+                    <div class="step-item complete" id="step-task-create">
+                      <div class="step-icon"><i class="fa-solid fa-check"></i></div>
+                      <div>
+                        <div class="step-label">任务提交成功</div>
+                        <div class="step-subtext" id="step-task-id">ID: -</div>
+                      </div>
+                    </div>
+                    <div class="step-item active" id="step-task-poll">
+                      <div class="step-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                      <div>
+                        <div class="step-label">GPU 云端渲染视频中...</div>
+                        <div class="step-subtext" id="step-task-elapsed">已耗时: 0秒</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="progress-bar-wrap">
+                    <div class="progress-bar" id="polling-progress"></div>
+                  </div>
+                </div>
+
+                <!-- Success player -->
+                <div id="preview-state-success" style="display: none; width: 100%;">
+                  <video id="preview-video" class="video-player" controls></video>
+                  <div class="video-actions">
+                    <a href="" id="btn-download" class="btn" download target="_blank"><i class="fa-solid fa-download"></i> 下载视频</a>
+                    <button id="btn-reset-preview" class="btn btn-secondary"><i class="fa-solid fa-rotate-left"></i> 重置</button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- History Records -->
+        <div class="history-section-header">
+          <h2>云端生成历史任务</h2>
+          <button id="btn-refresh-history" class="btn btn-secondary" style="width: auto; padding: 6px 14px;"><i class="fa-solid fa-rotate"></i> 刷新历史</button>
+        </div>
+
+        <div class="history-grid" id="history-grid-container">
+          <!-- Dynamically populated -->
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Big video preview modal -->
+  <div class="modal" id="video-modal">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close-btn">&times;</button>
+      <video id="modal-video" controls autoplay></video>
+    </div>
+  </div>
+
+  <script>
+    // --- State variables ---
+    let currentToken = localStorage.getItem('loova_bearer_token') || '';
+    let currentAppId = localStorage.getItem('loova_app_id') || '52000';
+    let connectionMode = localStorage.getItem('loova_conn_mode') || 'proxy';
+    let defaultImageUrl = localStorage.getItem('loova_last_image_url') || 'https://res.loova.ai/uploads/6a213709003366bfe60b75af/i2v/f1f94ba7dde2416086d486fe7a5db7e6_1781100539.jpg';
+    let currentUserProfile = null;
+    let selectedAspectRatio = '16:9';
+    let activePollingTaskId = null;
+    let pollingInterval = null;
+    let pollingStartTime = null;
+
+    // --- DOM Elements ---
+    const tokenInput = document.getElementById('auth-token');
+    const appIdInput = document.getElementById('app-id');
+    const connModeSelect = document.getElementById('connection-mode');
+    const modeDesc = document.getElementById('mode-desc');
+    const btnSaveAuth = document.getElementById('btn-save-auth');
+    const profileContainer = document.getElementById('profile-container');
+    const profEmail = document.getElementById('prof-email');
+    const profUid = document.getElementById('prof-uid');
+    const profBalance = document.getElementById('prof-balance');
+    const connDot = document.getElementById('conn-dot');
+    const connStatus = document.getElementById('conn-status');
+    const terminalLogs = document.getElementById('terminal-logs');
+
+    const promptInput = document.getElementById('prompt');
+    const imageUrlInput = document.getElementById('image-url');
+    const modelSelect = document.getElementById('v-model');
+    const durationSelect = document.getElementById('duration');
+    const ratioSelector = document.getElementById('ratio-selector');
+    const btnSubmit = document.getElementById('btn-submit');
+
+    const previewScreen = document.getElementById('preview-screen');
+    const previewStateIdle = document.getElementById('preview-state-idle');
+    const previewStateActive = document.getElementById('preview-state-active');
+    const previewStateSuccess = document.getElementById('preview-state-success');
+    const previewVideo = document.getElementById('preview-video');
+    const btnDownload = document.getElementById('btn-download');
+    const btnResetPreview = document.getElementById('btn-reset-preview');
+    const stepTaskId = document.getElementById('step-task-id');
+    const stepTaskElapsed = document.getElementById('step-task-elapsed');
+    const pollingProgress = document.getElementById('polling-progress');
+
+    const btnRefreshHistory = document.getElementById('btn-refresh-history');
+    const historyGridContainer = document.getElementById('history-grid-container');
+
+    const videoModal = document.getElementById('video-modal');
+    const modalVideo = document.getElementById('modal-video');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+
+    // --- Logger helper ---
+    function log(message, type = 'info') {
+      const line = document.createElement('div');
+      line.className = `log-line log-${type}`;
+      const time = new Date().toLocaleTimeString();
+      line.textContent = `[${time}] ${message}`;
+      
+      // If it is the default first line, clear it
+      if (terminalLogs.textContent === 'Waiting for authentication...') {
+        terminalLogs.innerHTML = '';
+      }
+      
+      terminalLogs.appendChild(line);
+      terminalLogs.scrollTop = terminalLogs.scrollHeight;
+    }
+
+    // --- Initialize values ---
+    if (currentToken) {
+      tokenInput.value = currentToken;
+    }
+    if (currentAppId) {
+      appIdInput.value = currentAppId;
+    }
+    if (defaultImageUrl) {
+      imageUrlInput.value = defaultImageUrl;
+    }
+    if (connectionMode) {
+      connModeSelect.value = connectionMode;
+      updateModeDescription();
+    }
+
+    // --- Helper to get API Endpoint Base ---
+    function getApiEndpoint(path) {
+      if (connModeSelect.value === 'proxy') {
+        // Route through local Express proxy route
+        return `/api/loova-proxy/${path}`;
+      } else {
+        // Direct browser request to remote loova.ai
+        return `https://loova.ai/loovaai-api/${path}`;
+      }
+    }
+
+    function updateModeDescription() {
+      if (connModeSelect.value === 'proxy') {
+        modeDesc.textContent = '推荐使用【Node 代理模式】，通过本地 Node 服务中转请求，可完美避开浏览器跨域限制。';
+      } else {
+        modeDesc.textContent = '警告：【浏览器直连模式】在直接从浏览器发出跨域请求时，可能会触发 CORS 安全拦截，需要开启 CORS 解除插件。';
+      }
+    }
+
+    connModeSelect.addEventListener('change', () => {
+      localStorage.setItem('loova_conn_mode', connModeSelect.value);
+      updateModeDescription();
+      log(`切换连接模式为: ${connModeSelect.value === 'proxy' ? 'Node 本地代理' : '浏览器直连'}`);
+    });
+
+    // --- Ratio selector handler ---
+    ratioSelector.addEventListener('click', (e) => {
+      const item = e.target.closest('.ratio-item');
+      if (!item) return;
+
+      Array.from(ratioSelector.children).forEach(child => child.classList.remove('active'));
+      item.classList.add('active');
+      selectedAspectRatio = item.getAttribute('data-ratio');
+      log(`切换纵横比为: ${selectedAspectRatio}`);
+    });
+
+    // --- Save Authorization & Fetch Profile ---
+    async function loadUserProfile() {
+      const token = tokenInput.value.trim();
+      const appId = appIdInput.value.trim();
+
+      if (!token) {
+        log('Token 不能为空', 'err');
+        setConnectionState(false, '未输入 Bearer Token');
+        return;
+      }
+
+      currentToken = token;
+      currentAppId = appId;
+      localStorage.setItem('loova_bearer_token', token);
+      localStorage.setItem('loova_app_id', appId);
+
+      const url = getApiEndpoint('users');
+      log(`正在发送请求验证 Token (连接模式: ${connModeSelect.value})...`, 'info');
+
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'accept': '*/*',
+            'authorization': `Bearer ${token}`,
+            'x-app-id': appId
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP 异常 ${response.status}: ${await response.text()}`);
+        }
+
+        const data = await response.json();
+        currentUserProfile = data;
+
+        // Populate profile DOM
+        profEmail.textContent = data.email || data.user_name || 'N/A';
+        profUid.textContent = data.id || data.user_id || 'N/A';
+        profBalance.textContent = (data.balance !== undefined ? data.balance : 'N/A');
+        
+        profileContainer.style.display = 'block';
+        btnSubmit.disabled = false;
+        
+        setConnectionState(true, `已连接: ${data.email || '用户'}`);
+        log(`Token 验证成功! 当前可用点数: ${data.balance}`, 'success');
+
+        // Refresh task list
+        await loadTaskHistory();
+
+      } catch (err) {
+        console.error(err);
+        log(`Token 验证失败: ${err.message}`, 'err');
+        setConnectionState(false, 'Token 验证失败');
+        profileContainer.style.display = 'none';
+        btnSubmit.disabled = true;
+      }
+    }
+
+    btnSaveAuth.addEventListener('click', loadUserProfile);
+
+    function setConnectionState(online, text) {
+      if (online) {
+        connDot.className = 'status-dot online';
+        connStatus.textContent = text;
+      } else {
+        connDot.className = 'status-dot offline';
+        connStatus.textContent = text;
+      }
+    }
+
+    // --- Parse Image URL Key ---
+    function parseImageKey(url) {
+      if (!url) return '';
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname.includes('loova.ai')) {
+          return parsed.pathname.replace(/^\//, '');
+        }
+      } catch (e) {
+        // Not a valid URL
+      }
+      return url;
+    }
+
+    // --- Submit Task (img2vid) ---
+    async function submitImageToVideoTask() {
+      const prompt = promptInput.value.trim();
+      const imageUrl = imageUrlInput.value.trim();
+      const model = modelSelect.value;
+      const duration = parseInt(durationSelect.value);
+
+      if (!prompt) {
+        alert('请输入视频描述提示词！');
+        return;
+      }
+      if (!imageUrl) {
+        alert('请输入参考图片链接！');
+        return;
+      }
+
+      localStorage.setItem('loova_last_image_url', imageUrl);
+      
+      const endpoint = getApiEndpoint('videos/img2vid');
+      log(`正在发起 img2vid 请求...`, 'info');
+      
+      const imageKey = parseImageKey(imageUrl);
+      const userId = currentUserProfile ? currentUserProfile.id : '6a213709003366bfe60b75af';
+
+      const payload = {
+        v_model: model,
+        out_number: 1,
+        pay_type: 'credit',
+        prompt: prompt,
+        is_ref: true,
+        image_keys: [],
+        media_list: [
+          {
+            deleted_time: null,
+            user_id: userId,
+            file_type: 'image',
+            url: imageUrl,
+            name: imageKey,
+            extra: {
+              duration: 0,
+              file_url: imageUrl,
+              file_key: imageKey,
+              type: 'image'
+            },
+            id: '6a297009' + Math.random().toString(16).slice(2, 10),
+            duration: 0,
+            file_url: imageUrl,
+            file_key: imageKey,
+            type: 'image'
+          }
+        ],
+        video_keys: [],
+        audio_keys: [],
+        duration: duration,
+        aspect_ratio: selectedAspectRatio
+      };
+
+      try {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 提交生成中...';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'authorization': `Bearer ${currentToken}`,
+            'content-type': 'application/json',
+            'x-app-id': currentAppId
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP 异常 ${response.status}: ${await response.text()}`);
+        }
+
+        const data = await response.json();
+        
+        if (data && data.data && data.data.task_id) {
+          const apiTaskId = data.data.task_id;
+          log(`任务创建成功！返回 Task ID: ${apiTaskId}`, 'success');
+          startPolling(apiTaskId);
+        } else {
+          log(`接口未返回有效 task_id: ${JSON.stringify(data)}`, 'warn');
+          alert('接口未返回有效的任务ID，详情查看日志。');
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = '<i class="fa-solid fa-play"></i> 立即提交生成 (耗费点数)';
+        }
+
+      } catch (err) {
+        console.error(err);
+        log(`提交失败: ${err.message}`, 'err');
+        alert(`视频任务提交失败: ${err.message}`);
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-play"></i> 立即提交生成 (耗费点数)';
+      }
+    }
+
+    btnSubmit.addEventListener('click', submitImageToVideoTask);
+
+    // --- Polling Logic ---
+    function startPolling(taskId) {
+      activePollingTaskId = taskId;
+      pollingStartTime = Date.now();
+
+      // Reset UI state to Active Polling
+      previewStateIdle.style.display = 'none';
+      previewStateSuccess.style.display = 'none';
+      previewStateActive.style.display = 'block';
+      stepTaskId.textContent = `ID: ${taskId}`;
+      pollingProgress.style.width = '10%';
+
+      log(`进入状态轮询通道，监听任务状态...`, 'info');
+
+      if (pollingInterval) clearInterval(pollingInterval);
+
+      pollingInterval = setInterval(async () => {
+        const elapsed = Math.floor((Date.now() - pollingStartTime) / 1000);
+        stepTaskElapsed.textContent = `已耗时: ${elapsed}秒`;
+        
+        const simulatedPercent = Math.min(95, 10 + (elapsed * 2));
+        pollingProgress.style.width = `${simulatedPercent}%`;
+
+        try {
+          const taskRecord = await fetchSpecificTaskRecord(taskId);
+          if (taskRecord) {
+            const status = String(taskRecord.status || taskRecord.task_status || '').toLowerCase();
+            
+            const isFinished = ['success', 'succeeded', 'complete', 'completed', 'finished', 'done'].includes(status) || Number(taskRecord.status) === 2;
+            const isFailed = ['failed', 'fail', 'error', 'canceled', 'cancelled'].includes(status) || Number(taskRecord.status) === 3;
+
+            if (isFinished) {
+              clearInterval(pollingInterval);
+              pollingProgress.style.width = '100%';
+              
+              const videoUrl = findVideoUrlFromRecord(taskRecord);
+              if (videoUrl) {
+                log(`视频生成成功！链接: ${videoUrl}`, 'success');
+                showSuccessVideo(videoUrl);
+              } else {
+                log(`任务标记为成功，但找不到视频链接`, 'warn');
+                alert('任务已完成，但未能提取到视频链接。');
+                resetPreviewArea();
+              }
+              
+              btnSubmit.disabled = false;
+              btnSubmit.innerHTML = '<i class="fa-solid fa-play"></i> 立即提交生成 (耗费点数)';
+              loadUserProfile(); // Refresh balance
+            } 
+            else if (isFailed) {
+              clearInterval(pollingInterval);
+              const failReason = taskRecord.error_message || taskRecord.message || 'Loova 引擎计算失败';
+              log(`视频渲染失败: ${failReason}`, 'err');
+              alert(`任务失败: ${failReason}`);
+              resetPreviewArea();
+              
+              btnSubmit.disabled = false;
+              btnSubmit.innerHTML = '<i class="fa-solid fa-play"></i> 立即提交生成 (耗费点数)';
+              loadUserProfile(); // Refresh balance
+            }
+          }
+        } catch (e) {
+          console.error(e);
+          log(`轮询读取错误: ${e.message}`, 'warn');
+        }
+      }, 3000);
+    }
+
+    // --- Search Task in Paged List ---
+    async function fetchSpecificTaskRecord(taskId) {
+      const token = currentToken;
+      const appId = currentAppId;
+      const endpoint = getApiEndpoint('task_records/list_paged?page_num=1&page_size=20&task_types=t2v,i2v,tl2v,v2v,cs2v,ref2v,m2v,cc2v,k2v,h2v,v2v_remove_element,v2v_add_element,v2v_change_bg,v2v_add_effect,v2v_style_transfer,v2v_character_style,v2v_hair_style,v2v_angle_control,v2v_upscale,product_ads_generator,viral_ads_clone_video');
+
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'accept': '*/*',
+          'authorization': `Bearer ${token}`,
+          'x-app-id': appId
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`列表拉取异常 ${response.status}`);
+      }
+
+      const data = await response.json();
+      return findTaskRecord(data, taskId);
+    }
+
+    function findTaskRecord(value, taskId) {
+      if (!value || typeof value !== 'object') return null;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const found = findTaskRecord(item, taskId);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      const record = value;
+      if (
+        record.id === taskId ||
+        record.task_id === taskId ||
+        record.record_id === taskId ||
+        record.task_record_id === taskId
+      ) {
+        return record;
+      }
+
+      for (const item of Object.values(record)) {
+        const found = findTaskRecord(item, taskId);
+        if (found) return found;
+      }
+
+      return null;
+    }
+
+    function findVideoUrlFromRecord(record) {
+      if (!record) return null;
+      
+      const candidate =
+        record.video_url ||
+        record.videoUrl ||
+        record.output_url ||
+        record.outputUrl ||
+        record.url ||
+        record.file_url ||
+        record.fileUrl;
+
+      if (typeof candidate === 'string' && /^https?:\/\//.test(candidate)) {
+        return candidate;
+      }
+
+      for (const item of Object.values(record)) {
+        if (item && typeof item === 'object') {
+          const found = findVideoUrlFromRecord(item);
+          if (found) return found;
+        }
+      }
+
+      return null;
+    }
+
+    // --- Show Success preview ---
+    function showSuccessVideo(url) {
+      previewStateActive.style.display = 'none';
+      previewStateSuccess.style.display = 'block';
+      previewVideo.src = url;
+      btnDownload.href = url;
+      previewVideo.play();
+    }
+
+    function resetPreviewArea() {
+      if (pollingInterval) clearInterval(pollingInterval);
+      previewStateActive.style.display = 'none';
+      previewStateSuccess.style.display = 'none';
+      previewStateIdle.style.display = 'flex';
+      previewVideo.src = '';
+    }
+
+    btnResetPreview.addEventListener('click', resetPreviewArea);
+
+    // --- Fetch Task History ---
+    async function loadTaskHistory() {
+      if (!currentToken) return;
+
+      log('正在刷新云端生成历史...', 'info');
+      const endpoint = getApiEndpoint('task_records/list_paged?page_num=1&page_size=16&task_types=t2v,i2v,tl2v,v2v,cs2v,ref2v,m2v,cc2v,k2v,h2v,v2v_remove_element,v2v_add_element,v2v_change_bg,v2v_add_effect,v2v_style_transfer,v2v_character_style,v2v_hair_style,v2v_angle_control,v2v_upscale,product_ads_generator,viral_ads_clone_video');
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'accept': '*/*',
+            'authorization': `Bearer ${currentToken}`,
+            'x-app-id': currentAppId
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`拉取异常 ${response.status}`);
+        }
+
+        const resData = await response.json();
+        const records = resData?.data?.list || [];
+        log(`拉取历史记录完成，共 ${records.length} 条数据`, 'info');
+
+        renderHistory(records);
+
+      } catch (err) {
+        console.error(err);
+        log(`拉取历史记录失败: ${err.message}`, 'err');
+      }
+    }
+
+    btnRefreshHistory.addEventListener('click', loadTaskHistory);
+
+    // --- Render History ---
+    function renderHistory(list) {
+      historyGridContainer.innerHTML = '';
+
+      if (list.length === 0) {
+        historyGridContainer.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">
+            <i class="fa-solid fa-folder-open" style="font-size: 2rem; margin-bottom: 12px; opacity: 0.5;"></i>
+            <p>没有在云端找到任何生成记录。</p>
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach(item => {
+        const taskId = item.id || item.task_id || '';
+        const prompt = item.prompt || '图生视频任务';
+        const model = item.v_model || 'seedance';
+        const duration = item.duration || 5;
+        const aspect = item.aspect_ratio || '16:9';
+        const created = item.created_time ? item.created_time.substring(0, 16) : '未知时间';
+        
+        let status = 'processing';
+        const rawStatus = String(item.status || item.task_status || '').toLowerCase();
+        if (['success', 'succeeded', 'complete', 'completed', 'finished', 'done'].includes(rawStatus) || Number(item.status) === 2) {
+          status = 'success';
+        } else if (['failed', 'fail', 'error', 'canceled', 'cancelled'].includes(rawStatus) || Number(item.status) === 3) {
+          status = 'failed';
+        }
+
+        const videoUrl = findVideoUrlFromRecord(item);
+
+        let thumbnail = 'https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?w=400&q=80';
+        if (item.media_list && item.media_list.length > 0) {
+          thumbnail = item.media_list[0].url || thumbnail;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.innerHTML = `
+          <div class="card-media-preview">
+            <img src="${thumbnail}" alt="reference image" onerror="this.src='https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?w=400&q=80'">
+            ${videoUrl ? `
+              <div class="play-badge" data-video="${videoUrl}">
+                <i class="fa-solid fa-play"></i>
+              </div>
+            ` : ''}
+          </div>
+          <div class="card-body">
+            <p class="card-prompt-text" title="${prompt}">${prompt}</p>
+            <div class="card-meta-tags">
+              <span class="meta-tag model-tag">${model}</span>
+              <span class="meta-tag">${aspect}</span>
+              <span class="meta-tag">${duration}秒</span>
+            </div>
+            <div class="card-footer">
+              <span>${created}</span>
+              <span class="badge ${status}">${status}</span>
+            </div>
+          </div>
+        `;
+
+        if (videoUrl) {
+          const playBtn = card.querySelector('.play-badge');
+          playBtn.addEventListener('click', () => {
+            modalVideo.src = videoUrl;
+            videoModal.style.display = 'flex';
+            modalVideo.play();
+          });
+        }
+
+        historyGridContainer.appendChild(card);
+      });
+    }
+
+    // --- Close Modal ---
+    modalCloseBtn.addEventListener('click', () => {
+      videoModal.style.display = 'none';
+      modalVideo.pause();
+      modalVideo.src = '';
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === videoModal) {
+        videoModal.style.display = 'none';
+        modalVideo.pause();
+        modalVideo.src = '';
+      }
+    });
+
+    // --- Try loading token on boot ---
+    if (currentToken) {
+      log('检测到本地存储的 Token，正在初始化配置...', 'info');
+      loadUserProfile();
+    }
+  </script>
+</body>
+</html>

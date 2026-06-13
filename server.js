@@ -33,15 +33,69 @@ app.use(express.static(__dirname));
 app.use('/uploads', express.static(uploadDir));
 
 // Configurations
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const VIDEO_API_KEY = process.env.VIDEO_API_KEY || '';
 const VIDEO_API_BASE_URL = process.env.VIDEO_API_BASE_URL || '';
 const hasLiveApiConfig = Boolean(VIDEO_API_KEY && VIDEO_API_BASE_URL);
+
 
 // Check if API key is provided
 if (!hasLiveApiConfig) {
   console.warn('\x1b[33m%s\x1b[0m', '【警告】未在 .env 文件中检测到完整的视频 API 配置，系统将处于模拟模式！');
 }
+
+/**
+ * 0. CORS Bypass Proxy for Loova Web APIs
+ */
+app.all(/^\/api\/loova-proxy\/(.*)/, async (req, res) => {
+  const targetPath = req.params[0];
+  const url = `https://loova.ai/loovaai-api/${targetPath}`;
+  
+  // Construct clean headers to avoid triggering Cloudflare WAF/security blocks
+  const headers = {};
+  if (req.headers['authorization']) {
+    headers['authorization'] = req.headers['authorization'];
+  }
+  if (req.headers['x-app-id']) {
+    headers['x-app-id'] = req.headers['x-app-id'];
+  }
+  if (req.headers['content-type']) {
+    headers['content-type'] = req.headers['content-type'];
+  }
+  if (req.headers['accept']) {
+    headers['accept'] = req.headers['accept'];
+  }
+
+  try {
+    const https = require('https');
+    const httpsAgent = new https.Agent({
+      rejectUnauthorized: false,
+      keepAlive: true
+    });
+
+    const response = await axios({
+      method: req.method,
+      url,
+      data: req.body,
+      params: req.query,
+      headers,
+      httpsAgent,
+      validateStatus: () => true
+    });
+
+    Object.keys(response.headers).forEach(key => {
+      if (!['content-encoding', 'transfer-encoding'].includes(key.toLowerCase())) {
+        res.setHeader(key, response.headers[key]);
+      }
+    });
+
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error('Proxy request failed:', error.message);
+    res.status(500).json({ message: 'Proxy error: ' + error.message });
+  }
+});
+
 
 /**
  * 1. Check Credits Balance
