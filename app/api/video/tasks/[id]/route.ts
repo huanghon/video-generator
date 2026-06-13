@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
@@ -7,6 +8,16 @@ import { refundVideoTaskIfNeeded } from '@/lib/credits';
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '查询视频任务失败';
+}
+
+function toProviderRaw(rawResponse: unknown) {
+  return rawResponse === undefined ? undefined : (rawResponse as Prisma.InputJsonValue);
+}
+
+function publicTask(task: any) {
+  if (!task) return task;
+  const { providerRaw, ...safeTask } = task;
+  return safeTask;
 }
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -51,7 +62,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           data: {
             status: 'success',
             videoUrl: providerStatus.videoUrl,
-            errorMessage: null
+            errorMessage: null,
+            providerRaw: toProviderRaw(providerStatus.rawResponse)
           }
         });
         await releaseVideoTaskKeyIfNeeded(task.id);
@@ -62,7 +74,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           where: { id: task.id },
           data: {
             status: 'failed',
-            errorMessage: providerStatus.errorMessage || '视频生成失败'
+            errorMessage: providerStatus.errorMessage || '视频生成失败',
+            providerRaw: toProviderRaw(providerStatus.rawResponse)
           }
         });
         task = (await refundVideoTaskIfNeeded(
@@ -81,5 +94,5 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     select: { balance: true }
   });
 
-  return NextResponse.json({ task, balance: freshUser?.balance ?? user!.balance });
+  return NextResponse.json({ task: publicTask(task), balance: freshUser?.balance ?? user!.balance });
 }

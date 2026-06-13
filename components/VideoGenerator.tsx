@@ -19,6 +19,7 @@ type VideoTask = {
   model: string;
   aspectRatio?: string | null;
   cost: number;
+  taskType?: string | null;
   status: string;
   errorMessage?: string | null;
   createdAt: string;
@@ -163,6 +164,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   const [showMentionPicker, setShowMentionPicker] = useState(false);
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [activeTaskId, setActiveTaskId] = useState('');
+  const [previewSection, setPreviewSection] = useState<ActiveSection>('image-to-video');
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
   const [progress, setProgress] = useState(0);
   const [renderPercent, setRenderPercent] = useState(0);
@@ -174,7 +176,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   const hasEnoughCredits = user.balance >= COST;
   const isOmniReference = activeSection === 'image-to-video';
   const isTextToVideo = activeSection === 'text-to-video';
-  const isProcessing = isOmniReference && status === 'processing';
+  const isProcessing = status === 'processing';
   const currentCopy = isTextToVideo ? TEXT_TO_VIDEO_COPY : OMNI_REFERENCE_COPY;
   const currentPrompt = isTextToVideo ? textPrompt : imagePrompt;
   const currentHeader = HEADER_COPY[activeSection];
@@ -199,7 +201,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [activeTaskId, status]);
+  }, [activeTaskId, previewSection, status]);
 
   async function refreshMe() {
     const response = await fetch('/api/auth/me');
@@ -309,8 +311,11 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
       setError('请先上传参考素材');
       return;
     }
-    if (!primaryImageMaterial) {
-      setError('当前生成接口暂只支持图片参考，请至少上传一张图片；视频/音频可先用于提示词引用。');
+    const hasVisualReference = referenceMaterials.some(
+      (material) => material.type === 'image' || material.type === 'video'
+    );
+    if (!hasVisualReference) {
+      setError('音频不能单独作为参考，请至少上传一张图片或一个视频。');
       return;
     }
     if (!imagePrompt.trim()) {
@@ -319,14 +324,19 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     }
 
     const formData = new FormData();
-    // TODO: 接入支持后，将参考视频和参考音频一并传给后端与第三方接口。
-    formData.append('image', primaryImageMaterial.file);
+    referenceMaterials.forEach((material) => {
+      formData.append('references', material.file);
+    });
+    if (primaryImageMaterial) {
+      formData.append('image', primaryImageMaterial.file);
+    }
     formData.append('prompt', imagePrompt.trim());
     formData.append('model', model);
     formData.append('function_mode', mode);
     formData.append('aspectRatio', selectedRatio);
     formData.append('duration', String(duration));
 
+    setPreviewSection('image-to-video');
     setStatus('processing');
     setProgress(20);
     setRenderPercent(10);
@@ -355,17 +365,53 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     await pollTask(result.task.id);
   }
 
-  function handleTextToVideoGenerate(event: FormEvent<HTMLFormElement>) {
+  async function handleTextToVideoGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTextError('');
     setTextNotice('');
 
+    if (!hasEnoughCredits) {
+      setTextError('积分不足，请联系管理员充值');
+      return;
+    }
     if (!textPrompt.trim()) {
       setTextError('请输入视频提示词');
       return;
     }
 
-    setTextNotice('文生视频接口待接入，当前仅完成页面与参数校验，未提交生成任务。');
+    setPreviewSection('text-to-video');
+    setStatus('processing');
+    setProgress(20);
+    setRenderPercent(10);
+    setVideoUrl('');
+
+    const response = await fetch('/api/video/text-generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: textPrompt.trim(),
+        model,
+        aspectRatio: selectedRatio,
+        duration
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setStatus('failed');
+      setTextError(result.message || '提交文生视频任务失败');
+      await refreshMe();
+      await loadHistory();
+      return;
+    }
+
+    setActiveTaskId(result.task.id);
+    setProgress(35);
+    setRenderPercent(20);
+    await refreshMe();
+    await loadHistory();
+    await pollTask(result.task.id);
   }
 
   async function pollTask(taskId: string) {
@@ -373,7 +419,11 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      setError(result.message || '查询任务状态失败');
+      if (isTextToVideo) {
+        setTextError(result.message || '查询任务状态失败');
+      } else {
+        setError(result.message || '查询任务状态失败');
+      }
       return;
     }
 
@@ -396,7 +446,12 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
 
     if (task.status === 'failed') {
       setStatus('failed');
-      setError(task.errorMessage || '全能参考生成失败，本次扣除的积分已自动退还');
+      const failedMessage = task.errorMessage || '视频生成失败，本次扣除的积分已自动退还';
+      if (task.taskType === 'text-to-video') {
+        setTextError(failedMessage);
+      } else {
+        setError(failedMessage);
+      }
       setActiveTaskId('');
       await refreshMe();
       await loadHistory();
@@ -409,12 +464,18 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   }
 
   function openTask(task: VideoTask) {
-    setImagePrompt(task.prompt);
+    const targetSection = task.taskType === 'text-to-video' ? 'text-to-video' : 'image-to-video';
+    if (task.taskType === 'text-to-video') {
+      setTextPrompt(task.prompt);
+    } else {
+      setImagePrompt(task.prompt);
+    }
     setSelectedRatio(task.aspectRatio || '16:9');
     setModel(task.model);
     setVideoUrl(task.videoUrl || '');
     setStatus(task.status === 'success' ? 'success' : task.status === 'failed' ? 'failed' : 'processing');
-    switchSection('image-to-video');
+    setPreviewSection(targetSection);
+    switchSection(targetSection);
   }
 
   function renderReferenceUploader() {
@@ -559,21 +620,23 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor={`${activeSection}-mode-select`}>
-              运动控制模式
-            </label>
-            <div className="select-wrapper">
-              <select
-                id={`${activeSection}-mode-select`}
-                value={mode}
-                onChange={(event) => setMode(event.target.value)}
-              >
-                <option value="omni_reference">Omni Reference (全景自适应参考)</option>
-                <option value="first_last_frames">First-Last Frames (首尾帧过渡)</option>
-              </select>
+          {isOmniReference ? (
+            <div className="form-group">
+              <label className="form-label" htmlFor={`${activeSection}-mode-select`}>
+                运动控制模式
+              </label>
+              <div className="select-wrapper">
+                <select
+                  id={`${activeSection}-mode-select`}
+                  value={mode}
+                  onChange={(event) => setMode(event.target.value)}
+                >
+                  <option value="omni_reference">Omni Reference (全景自适应参考)</option>
+                  <option value="first_last_frames">First-Last Frames (首尾帧过渡)</option>
+                </select>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="form-group full-width">
             <label className="form-label">画面纵横比</label>
@@ -616,7 +679,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
           </div>
         </div>
 
-        {isOmniReference && !hasEnoughCredits ? (
+        {!hasEnoughCredits ? (
           <p className="insufficient-credit">积分不足，请联系管理员充值</p>
         ) : null}
         {isOmniReference && error ? <p className="error-message">{error}</p> : null}
@@ -626,14 +689,10 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
         <button
           className="submit-btn"
           type="submit"
-          disabled={isOmniReference ? !hasEnoughCredits || isProcessing : false}
+          disabled={!hasEnoughCredits || isProcessing}
         >
           <span className="btn-text">
-            {isOmniReference
-              ? isProcessing
-                ? '生成中...'
-                : `立即生成视频，消耗 ${COST} 积分`
-              : '立即生成视频'}
+            {isProcessing ? '生成中...' : `立即生成视频，消耗 ${COST} 积分`}
           </span>
           <span className="btn-icon">
             <i className="fa-solid fa-play" />
@@ -644,7 +703,8 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   }
 
   function renderPreviewPanel() {
-    const previewStatus = isTextToVideo ? 'idle' : status;
+    const previewStatus = previewSection === activeSection ? status : 'idle';
+    const panelError = previewSection === activeSection ? (isTextToVideo ? textError : error) : '';
 
     return (
       <div className="panel-card preview-panel">
@@ -656,33 +716,25 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
         </div>
 
         <div className="preview-container">
-          {isTextToVideo ? (
+          {previewStatus === 'idle' || previewStatus === 'failed' ? (
             <div className="preview-state state-idle">
               <div className="pulse-ring">
                 <i className="fa-solid fa-photo-film" />
               </div>
-              <h4>{TEXT_TO_VIDEO_COPY.idleTitle}</h4>
-              <p>{TEXT_TO_VIDEO_COPY.idleDescription}</p>
+              <h4>{previewStatus === 'failed' ? '生成未完成' : currentCopy.idleTitle}</h4>
+              <p>{panelError || currentCopy.idleDescription}</p>
             </div>
           ) : null}
 
-          {isOmniReference && (status === 'idle' || status === 'failed') ? (
-            <div className="preview-state state-idle">
-              <div className="pulse-ring">
-                <i className="fa-solid fa-photo-film" />
-              </div>
-              <h4>{status === 'failed' ? '生成未完成' : OMNI_REFERENCE_COPY.idleTitle}</h4>
-              <p>{error || OMNI_REFERENCE_COPY.idleDescription}</p>
-            </div>
-          ) : null}
-
-          {isOmniReference && status === 'processing' ? (
+          {previewStatus === 'processing' ? (
             <div className="preview-state state-processing">
               <div className="loader-circle" />
               <div className="processing-steps">
                 <div className="step-item completed">
                   <span className="step-dot" />
-                  <span className="step-name">素材上传与任务扣费完成</span>
+                  <span className="step-name">
+                    {isTextToVideo ? '提示词提交与任务扣费完成' : '素材上传与任务扣费完成'}
+                  </span>
                   <span className="step-percent">100%</span>
                 </div>
                 <div className="step-item completed">
@@ -702,7 +754,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
             </div>
           ) : null}
 
-          {isOmniReference && status === 'success' ? (
+          {previewStatus === 'success' ? (
             <div className="preview-state state-success">
               <div className="video-wrapper">
                 <video src={videoUrl} controls preload="auto" width="100%" />
@@ -718,6 +770,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
                     setStatus('idle');
                     setVideoUrl('');
                     setError('');
+                    setTextError('');
                   }}
                 >
                   <i className="fa-solid fa-arrows-rotate" /> 重新生成
@@ -861,6 +914,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
                     <p className="card-prompt">{task.errorMessage || task.prompt}</p>
                     <div className="card-meta">
                       <div className="card-meta-left">
+                        <span>{task.taskType === 'text-to-video' ? '文生视频' : '全能参考'}</span>
                         <span>{task.aspectRatio || '16:9'}</span>
                         <span>{task.cost} 积分</span>
                       </div>

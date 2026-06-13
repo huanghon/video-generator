@@ -9,7 +9,23 @@ export async function GET() {
   const tasks = await prisma.videoTask.findMany({
     orderBy: { createdAt: 'desc' },
     take: 200,
-    include: {
+    select: {
+      id: true,
+      userId: true,
+      prompt: true,
+      imageUrl: true,
+      videoUrl: true,
+      model: true,
+      aspectRatio: true,
+      cost: true,
+      taskType: true,
+      status: true,
+      apiTaskId: true,
+      apiKeyAccountId: true,
+      keyReleasedAt: true,
+      errorMessage: true,
+      createdAt: true,
+      updatedAt: true,
       user: {
         select: { username: true }
       }

@@ -48,10 +48,12 @@ model VideoTask {
   model           String
   aspectRatio     String?
   cost            Int
+  taskType        String         @default("image-to-video")
   status          String         @default("pending")
   apiTaskId       String?
   apiKeyAccountId String?
   keyReleasedAt   DateTime?
+  providerRaw     Json?
   errorMessage    String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -60,6 +62,7 @@ model VideoTask {
 
   @@index([userId])
   @@index([status])
+  @@index([taskType])
   @@index([apiTaskId])
   @@index([apiKeyAccountId])
   @@index([createdAt])

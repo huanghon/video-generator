@@ -30,6 +30,7 @@ type VideoTask = {
   prompt: string;
   model: string;
   cost: number;
+  taskType?: string | null;
   status: string;
   videoUrl?: string | null;
   errorMessage?: string | null;
@@ -540,6 +541,7 @@ function VideoTasksTable({ tasks }: { tasks: VideoTask[] }) {
           <tr>
             <th>用户</th>
             <th>状态</th>
+            <th>类型</th>
             <th>模型</th>
             <th>积分</th>
             <th>提示词</th>
@@ -553,6 +555,7 @@ function VideoTasksTable({ tasks }: { tasks: VideoTask[] }) {
               <td>
                 <span className={`status-badge ${task.status}`}>{task.status}</span>
               </td>
+              <td>{task.taskType === 'text-to-video' ? '文生视频' : '全能参考'}</td>
               <td>{task.model}</td>
               <td>{task.cost}</td>
               <td>{task.errorMessage || task.prompt}</td>

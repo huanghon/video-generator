@@ -35,7 +35,7 @@ async function uploadToCloudinary(file: File) {
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error('缺少 Cloudinary 环境变量，无法保存上传图片');
+    throw new Error('缺少 Cloudinary 环境变量，无法保存上传素材');
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
@@ -50,7 +50,7 @@ async function uploadToCloudinary(file: File) {
   formData.append('folder', folder);
   formData.append('signature', signature);
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
     method: 'POST',
     body: formData
   });
@@ -65,7 +65,7 @@ async function uploadToCloudinary(file: File) {
 
 async function uploadToVercelBlob(file: File) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    throw new Error('缺少 BLOB_READ_WRITE_TOKEN，无法保存上传图片');
+    throw new Error('缺少 BLOB_READ_WRITE_TOKEN，无法保存上传素材');
   }
 
   const extension = path.extname(file.name || '').toLowerCase() || '.png';
@@ -79,9 +79,9 @@ async function uploadToVercelBlob(file: File) {
   return blob.url;
 }
 
-export async function uploadImageForVideo(file: File) {
+export async function uploadReferenceAssetForVideo(file: File) {
   if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error('图片大小不能超过 10MB');
+    throw new Error('素材大小不能超过 10MB');
   }
 
   const provider = getStorageProvider();
@@ -106,5 +106,9 @@ export async function uploadImageForVideo(file: File) {
     return null;
   }
 
-  throw new Error('缺少图片存储配置，请配置 Cloudinary 或 Vercel Blob');
+  throw new Error('缺少素材存储配置，请配置 Cloudinary 或 Vercel Blob');
+}
+
+export async function uploadImageForVideo(file: File) {
+  return uploadReferenceAssetForVideo(file);
 }
