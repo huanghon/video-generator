@@ -102,7 +102,7 @@ export async function uploadImageForVideo(file: File) {
     return uploadToVercelBlob(file);
   }
 
-  if (process.env.LOOVA_API_MOCK !== 'false') {
+  if (process.env.VIDEO_PROVIDER_MOCK !== 'false') {
     return null;
   }
 

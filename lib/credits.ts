@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 
-export const VIDEO_GENERATION_COST = 12;
+export const VIDEO_GENERATION_COST = 100;
 
 export async function refundVideoTaskIfNeeded(taskId: string, reason = '视频生成失败自动退还积分') {
   return prisma.$transaction(async (tx) => {

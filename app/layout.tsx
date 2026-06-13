@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI 智能图生视频工作台',
+  title: 'AI 智能视频工作台',
   description: 'Image to video generation workspace'
 };
 

@@ -284,6 +284,52 @@ textarea:disabled {
   color: var(--text-primary);
 }
 
+.mini-input.wide {
+  max-width: 220px;
+}
+
+.mini-input.narrow {
+  max-width: 74px;
+}
+
+.admin-table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.admin-table-toolbar h3 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.admin-table-toolbar p,
+.table-subtext {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.table-subtext {
+  display: block;
+  margin-top: 5px;
+}
+
+.masked-key {
+  display: block;
+  margin-bottom: 8px;
+  color: #bfdbfe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.concurrency-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .status-badge {
   display: inline-flex;
   border-radius: 999px;

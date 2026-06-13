@@ -10,13 +10,15 @@ services:
         value: 22
       - key: AUTH_COOKIE_SECURE
         value: "true"
-      - key: LOOVA_API_MOCK
+      - key: VIDEO_PROVIDER_MOCK
         value: "true"
       - key: STORAGE_PROVIDER
         value: cloudinary
       - key: AUTH_SECRET
         generateValue: true
       - key: SETUP_SECRET
+        generateValue: true
+      - key: KEY_ENCRYPTION_SECRET
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:

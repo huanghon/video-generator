@@ -22,17 +22,17 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
 AUTH_SECRET="use-a-long-random-secret"
 AUTH_COOKIE_SECURE=true
 BLOB_READ_WRITE_TOKEN="vercel-blob-token"
-LOOVA_API_MOCK=true
-LOOVA_API_KEY=
-LOOVA_API_BASE_URL=
+VIDEO_PROVIDER_MOCK=true
+VIDEO_PROVIDER_BASE_URL=
+KEY_ENCRYPTION_SECRET="use-a-long-random-encryption-secret"
 ```
 
-Use `LOOVA_API_MOCK=true` until the real video provider is connected. When switching to real calls, set:
+Use `VIDEO_PROVIDER_MOCK=true` until the real video provider is connected. When switching to real calls, set:
 
 ```env
-LOOVA_API_MOCK=false
-LOOVA_API_KEY="your-provider-key"
-LOOVA_API_BASE_URL="https://provider.example.com/api"
+VIDEO_PROVIDER_MOCK=false
+VIDEO_PROVIDER_BASE_URL="https://provider.example.com/api"
+KEY_ENCRYPTION_SECRET="use-a-long-random-encryption-secret"
 ```
 
 ## 3. Initialize the database

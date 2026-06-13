@@ -40,23 +40,50 @@ model CreditLog {
 }
 
 model VideoTask {
-  id           String   @id @default(cuid())
-  userId       String
-  prompt       String
-  imageUrl     String?
-  videoUrl     String?
-  model        String
-  aspectRatio  String?
-  cost         Int
-  status       String   @default("pending")
-  apiTaskId    String?
-  errorMessage String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id])
+  id              String         @id @default(cuid())
+  userId          String
+  prompt          String
+  imageUrl        String?
+  videoUrl        String?
+  model           String
+  aspectRatio     String?
+  cost            Int
+  status          String         @default("pending")
+  apiTaskId       String?
+  apiKeyAccountId String?
+  keyReleasedAt   DateTime?
+  errorMessage    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  user            User           @relation(fields: [userId], references: [id])
+  apiKeyAccount   ApiKeyAccount? @relation(fields: [apiKeyAccountId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
   @@index([apiTaskId])
+  @@index([apiKeyAccountId])
   @@index([createdAt])
+}
+
+model ApiKeyAccount {
+  id                 String      @id @default(cuid())
+  name               String
+  provider           String      @default("video_provider")
+  apiKeyEncrypted    String
+  apiKeyMasked       String
+  baseUrl            String?
+  status             String      @default("active")
+  maxConcurrency     Int         @default(2)
+  currentConcurrency Int         @default(0)
+  lastUsedAt         DateTime?
+  sortOrder          Int         @default(0)
+  note               String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  videoTasks         VideoTask[]
+
+  @@index([status])
+  @@index([currentConcurrency])
+  @@index([lastUsedAt])
+  @@index([sortOrder])
 }

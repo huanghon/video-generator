@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ApiKeyCredential } from '@/lib/apiKeyPool';
 
 type CreateImageToVideoTaskParams = {
   prompt: string;
@@ -22,15 +23,20 @@ const MOCK_VIDEO_URL =
   'https://assets.mixkit.co/videos/preview/mixkit-cyberpunk-neon-city-streets-at-night-42289-large.mp4';
 
 function shouldUseMock() {
-  return (
-    process.env.LOOVA_API_MOCK !== 'false' ||
-    !process.env.LOOVA_API_KEY ||
-    !process.env.LOOVA_API_BASE_URL
-  );
+  return process.env.VIDEO_PROVIDER_MOCK !== 'false';
+}
+
+function getProviderBaseUrl(credential: ApiKeyCredential) {
+  const baseUrl = credential.baseUrl || process.env.VIDEO_PROVIDER_BASE_URL;
+  if (!baseUrl) {
+    throw new Error('缺少视频供应商 Base URL');
+  }
+  return baseUrl.replace(/\/$/, '');
 }
 
 export async function createImageToVideoTask(
-  params: CreateImageToVideoTaskParams
+  params: CreateImageToVideoTaskParams,
+  credential: ApiKeyCredential
 ): Promise<CreateImageToVideoTaskResult> {
   if (shouldUseMock()) {
     return {
@@ -38,9 +44,9 @@ export async function createImageToVideoTask(
     };
   }
 
-  // TODO: Replace this payload with the official Loova image-to-video request schema.
+  // TODO: Replace this payload with the official video provider request schema.
   const response = await axios.post(
-    `${process.env.LOOVA_API_BASE_URL}/v1/video/seedance-2`,
+    `${getProviderBaseUrl(credential)}/v1/video/seedance-2`,
     {
       model: params.model,
       prompt: params.prompt,
@@ -50,7 +56,7 @@ export async function createImageToVideoTask(
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.LOOVA_API_KEY}`,
+        Authorization: `Bearer ${credential.apiKey}`,
         'Content-Type': 'application/json'
       }
     }
@@ -61,7 +67,10 @@ export async function createImageToVideoTask(
   };
 }
 
-export async function getVideoTaskStatus(apiTaskId: string): Promise<VideoTaskStatusResult> {
+export async function getVideoTaskStatus(
+  apiTaskId: string,
+  credential: ApiKeyCredential
+): Promise<VideoTaskStatusResult> {
   if (apiTaskId.startsWith('mock_') || shouldUseMock()) {
     const createdAt = Number(apiTaskId.split('_')[1] || Date.now());
     if (Date.now() - createdAt > 8000) {
@@ -73,11 +82,11 @@ export async function getVideoTaskStatus(apiTaskId: string): Promise<VideoTaskSt
     return { status: 'processing' };
   }
 
-  // TODO: Replace this response mapping with the official Loova task status schema.
-  const response = await axios.get(`${process.env.LOOVA_API_BASE_URL}/v1/tasks`, {
+  // TODO: Replace this response mapping with the official video provider status schema.
+  const response = await axios.get(`${getProviderBaseUrl(credential)}/v1/tasks`, {
     params: { task_id: apiTaskId },
     headers: {
-      Authorization: `Bearer ${process.env.LOOVA_API_KEY}`
+      Authorization: `Bearer ${credential.apiKey}`
     }
   });
 

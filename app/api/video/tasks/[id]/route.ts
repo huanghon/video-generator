@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
-import { getVideoTaskStatus } from '@/lib/loova';
+import { decryptApiKey, releaseVideoTaskKeyIfNeeded } from '@/lib/apiKeyPool';
+import { getVideoTaskStatus } from '@/lib/videoProvider';
 import { refundVideoTaskIfNeeded } from '@/lib/credits';
 
 function getErrorMessage(error: unknown) {
@@ -26,7 +27,23 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
   if ((task.status === 'pending' || task.status === 'processing') && task.apiTaskId) {
     try {
-      const providerStatus = await getVideoTaskStatus(task.apiTaskId);
+      if (!task.apiKeyAccountId) {
+        throw new Error('任务缺少 API Key 绑定，无法查询供应商状态');
+      }
+
+      const apiKeyAccount = await prisma.apiKeyAccount.findUnique({
+        where: { id: task.apiKeyAccountId }
+      });
+
+      if (!apiKeyAccount) {
+        throw new Error('任务绑定的 API Key 不存在');
+      }
+
+      const providerStatus = await getVideoTaskStatus(task.apiTaskId, {
+        apiKeyAccountId: apiKeyAccount.id,
+        apiKey: decryptApiKey(apiKeyAccount.apiKeyEncrypted),
+        baseUrl: apiKeyAccount.baseUrl
+      });
 
       if (providerStatus.status === 'success') {
         task = await prisma.videoTask.update({
@@ -37,6 +54,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
             errorMessage: null
           }
         });
+        await releaseVideoTaskKeyIfNeeded(task.id);
       }
 
       if (providerStatus.status === 'failed') {
@@ -51,6 +69,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           task.id,
           providerStatus.errorMessage || '视频生成失败自动退还积分'
         )) as typeof task;
+        await releaseVideoTaskKeyIfNeeded(task.id);
       }
     } catch (error) {
       return NextResponse.json({ message: getErrorMessage(error), task }, { status: 502 });

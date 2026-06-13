@@ -42,15 +42,16 @@ These are generated or prefilled by `render.yaml`, but you can also set them man
 AUTH_SECRET=use-a-long-random-secret
 SETUP_SECRET=use-a-private-setup-secret
 AUTH_COOKIE_SECURE=true
-LOOVA_API_MOCK=true
+VIDEO_PROVIDER_MOCK=true
+KEY_ENCRYPTION_SECRET=use-a-long-random-encryption-secret
 ```
 
 When connecting the real video API:
 
 ```env
-LOOVA_API_MOCK=false
-LOOVA_API_KEY=your_provider_key
-LOOVA_API_BASE_URL=https://provider.example.com/api
+VIDEO_PROVIDER_MOCK=false
+VIDEO_PROVIDER_BASE_URL=https://provider.example.com/api
+KEY_ENCRYPTION_SECRET=use-a-long-random-encryption-secret
 ```
 
 ## 4. Initialize default users from the browser

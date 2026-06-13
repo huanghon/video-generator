@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DragEvent, FormEvent, useMemo, useRef, useState, useEffect } from 'react';
 
 type User = {
   id: string;
@@ -42,16 +42,26 @@ type GeneratorCopy = {
   suggestions: PromptSuggestion[];
 };
 
-const COST = 12;
+type ReferenceType = 'image' | 'video' | 'audio';
 
-const IMAGE_TO_VIDEO_COPY: GeneratorCopy = {
-  title: '图生视频 (Image to Video)',
-  subtitle: '上传图片、输入提示词，让静态图像生成动态视频。',
+type ReferenceMaterial = {
+  id: string;
+  file: File;
+  name: string;
+  type: ReferenceType;
+};
+
+const COST = 100;
+const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
+
+const OMNI_REFERENCE_COPY: GeneratorCopy = {
+  title: '全能参考 (Omni Reference)',
+  subtitle: '上传参考图片、参考视频或参考音频，结合提示词生成动态视频。',
   promptLabel: '2. 动态提示词 (Prompt)',
   promptDescription: '描述希望画面产生的运动',
-  placeholder: '例如：镜头缓慢推进，树叶在微风中轻轻摇曳，柔和的阳光洒在水面上...',
+  placeholder: '例如：镜头缓慢推进，参考 @素材名 的动作节奏与光影氛围，生成电影感动态画面...',
   idleTitle: '等待生成指令',
-  idleDescription: '请在左侧配置参考图与提示词，然后点击下方生成按钮。',
+  idleDescription: '请在左侧配置参考素材与提示词，然后点击下方生成按钮。',
   suggestions: [
     {
       label: '镜头推进',
@@ -90,8 +100,8 @@ const TEXT_TO_VIDEO_COPY: GeneratorCopy = {
 
 const HEADER_COPY: Record<ActiveSection, { title: string; subtitle: string }> = {
   'image-to-video': {
-    title: IMAGE_TO_VIDEO_COPY.title,
-    subtitle: IMAGE_TO_VIDEO_COPY.subtitle
+    title: OMNI_REFERENCE_COPY.title,
+    subtitle: OMNI_REFERENCE_COPY.subtitle
   },
   'text-to-video': {
     title: TEXT_TO_VIDEO_COPY.title,
@@ -107,6 +117,38 @@ const HEADER_COPY: Record<ActiveSection, { title: string; subtitle: string }> = 
   }
 };
 
+function getReferenceType(file: File): ReferenceType | null {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  return null;
+}
+
+function getReferenceTypeLabel(type: ReferenceType) {
+  if (type === 'image') return '图片';
+  if (type === 'video') return '视频';
+  return '音频';
+}
+
+function getReferenceTypeIcon(type: ReferenceType) {
+  if (type === 'image') return 'fa-solid fa-image';
+  if (type === 'video') return 'fa-solid fa-film';
+  return 'fa-solid fa-music';
+}
+
+function getMentionText(name: string) {
+  return `@${name}`;
+}
+
+function createReferenceId(file: File) {
+  const randomId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+
+  return `${file.name}-${file.lastModified}-${file.size}-${randomId}`;
+}
+
 export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [user, setUser] = useState(initialUser);
@@ -117,8 +159,8 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   const [duration, setDuration] = useState(5);
   const [model, setModel] = useState('seedance_2_0');
   const [mode, setMode] = useState('omni_reference');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [referenceMaterials, setReferenceMaterials] = useState<ReferenceMaterial[]>([]);
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [activeTaskId, setActiveTaskId] = useState('');
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
@@ -130,13 +172,20 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
   const [textNotice, setTextNotice] = useState('');
 
   const hasEnoughCredits = user.balance >= COST;
-  const isImageToVideo = activeSection === 'image-to-video';
+  const isOmniReference = activeSection === 'image-to-video';
   const isTextToVideo = activeSection === 'text-to-video';
-  const isProcessing = isImageToVideo && status === 'processing';
-
-  const currentCopy = isTextToVideo ? TEXT_TO_VIDEO_COPY : IMAGE_TO_VIDEO_COPY;
+  const isProcessing = isOmniReference && status === 'processing';
+  const currentCopy = isTextToVideo ? TEXT_TO_VIDEO_COPY : OMNI_REFERENCE_COPY;
   const currentPrompt = isTextToVideo ? textPrompt : imagePrompt;
   const currentHeader = HEADER_COPY[activeSection];
+  const primaryImageMaterial = referenceMaterials.find((material) => material.type === 'image');
+  const referencedMaterials = useMemo(
+    () =>
+      referenceMaterials.filter((material) =>
+        imagePrompt.includes(getMentionText(material.name))
+      ),
+    [imagePrompt, referenceMaterials]
+  );
 
   useEffect(() => {
     loadHistory();
@@ -151,8 +200,6 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
 
     return () => window.clearInterval(timer);
   }, [activeTaskId, status]);
-
-  const generatedTasks = useMemo(() => tasks, [tasks]);
 
   async function refreshMe() {
     const response = await fetch('/api/auth/me');
@@ -184,6 +231,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
 
     setImagePrompt(value);
     setError('');
+    setShowMentionPicker(value.endsWith('@') && referenceMaterials.length > 0);
   }
 
   function switchSection(section: ActiveSection) {
@@ -191,18 +239,65 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     setError('');
     setTextError('');
     setTextNotice('');
+    setShowMentionPicker(false);
     if (section === 'history') {
       loadHistory();
     }
   }
 
-  function handleImageSelect(file?: File | null) {
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+  function addReferenceFiles(files?: FileList | File[] | null) {
+    if (!files) return;
+
+    const nextMaterials: ReferenceMaterial[] = [];
+    const rejectedNames: string[] = [];
+
+    Array.from(files).forEach((file) => {
+      const type = getReferenceType(file);
+      if (!type || file.size > MAX_REFERENCE_BYTES) {
+        rejectedNames.push(file.name);
+        return;
+      }
+
+      nextMaterials.push({
+        id: createReferenceId(file),
+        file,
+        name: file.name,
+        type
+      });
+    });
+
+    if (rejectedNames.length > 0) {
+      setError(`以下素材格式不支持或超过 10MB：${rejectedNames.join('、')}`);
+    } else {
+      setError('');
+    }
+
+    if (nextMaterials.length > 0) {
+      setReferenceMaterials((current) => [...current, ...nextMaterials]);
+    }
   }
 
-  async function handleImageToVideoGenerate(event: FormEvent<HTMLFormElement>) {
+  function removeReferenceMaterial(id: string) {
+    setReferenceMaterials((current) => current.filter((material) => material.id !== id));
+  }
+
+  function handleReferenceDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    addReferenceFiles(event.dataTransfer.files);
+  }
+
+  function insertMaterialMention(material: ReferenceMaterial) {
+    const mention = getMentionText(material.name);
+    const nextPrompt = imagePrompt.endsWith('@')
+      ? `${imagePrompt.slice(0, -1)}${mention} `
+      : `${imagePrompt}${imagePrompt.endsWith(' ') || imagePrompt.length === 0 ? '' : ' '}${mention} `;
+
+    setImagePrompt(nextPrompt);
+    setShowMentionPicker(false);
+    setError('');
+  }
+
+  async function handleOmniReferenceGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
 
@@ -210,8 +305,12 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
       setError('积分不足，请联系管理员充值');
       return;
     }
-    if (!imageFile) {
-      setError('请先上传参考图');
+    if (referenceMaterials.length === 0) {
+      setError('请先上传参考素材');
+      return;
+    }
+    if (!primaryImageMaterial) {
+      setError('当前生成接口暂只支持图片参考，请至少上传一张图片；视频/音频可先用于提示词引用。');
       return;
     }
     if (!imagePrompt.trim()) {
@@ -220,7 +319,8 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     }
 
     const formData = new FormData();
-    formData.append('image', imageFile);
+    // TODO: 接入支持后，将参考视频和参考音频一并传给后端与第三方接口。
+    formData.append('image', primaryImageMaterial.file);
     formData.append('prompt', imagePrompt.trim());
     formData.append('model', model);
     formData.append('function_mode', mode);
@@ -241,7 +341,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
 
     if (!response.ok) {
       setStatus('failed');
-      setError(result.message || '提交图生视频任务失败');
+      setError(result.message || '提交全能参考任务失败');
       await refreshMe();
       await loadHistory();
       return;
@@ -296,7 +396,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
 
     if (task.status === 'failed') {
       setStatus('failed');
-      setError(task.errorMessage || '图生视频生成失败，本次扣除的积分已自动退还');
+      setError(task.errorMessage || '全能参考生成失败，本次扣除的积分已自动退还');
       setActiveTaskId('');
       await refreshMe();
       await loadHistory();
@@ -317,66 +417,117 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
     switchSection('image-to-video');
   }
 
-  function renderGeneratorForm() {
+  function renderReferenceUploader() {
     return (
-      <form onSubmit={isTextToVideo ? handleTextToVideoGenerate : handleImageToVideoGenerate}>
-        {isImageToVideo ? (
-          <div className="form-group">
-            <label className="form-label">
-              <span>1. 上传参考图</span>
-              <span className="label-desc">支持 JPG, PNG, WEBP 格式</span>
-            </label>
-            <div className="upload-container" onClick={() => fileInputRef.current?.click()}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(event) => handleImageSelect(event.target.files?.[0])}
-              />
-              {!imagePreview ? (
-                <div className="upload-placeholder">
-                  <div className="upload-icon">
-                    <i className="fa-solid fa-cloud-arrow-up" />
-                  </div>
-                  <h3>
-                    拖拽图片至此处，或 <span>点击上传</span>
-                  </h3>
-                  <p>建议比例 16:9 或 9:16，文件大小不超过 10MB</p>
-                </div>
-              ) : (
-                <div className="upload-preview-container">
-                  <img className="upload-preview-img" src={imagePreview} alt="Preview" />
-                  <button
-                    type="button"
-                    className="remove-btn"
-                    title="清除图片"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setImagePreview('');
-                      setImageFile(null);
-                    }}
-                  >
-                    <i className="fa-solid fa-xmark" />
-                  </button>
-                </div>
-              )}
+      <div className="form-group">
+        <label className="form-label">
+          <span>1. 上传参考素材</span>
+          <span className="label-desc">支持图片、视频、音频作为参考</span>
+        </label>
+        <div
+          className="upload-container"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleReferenceDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*"
+            multiple
+            hidden
+            onChange={(event) => {
+              addReferenceFiles(event.target.files);
+              event.currentTarget.value = '';
+            }}
+          />
+          <div className="upload-placeholder">
+            <div className="upload-icon">
+              <i className="fa-solid fa-cloud-arrow-up" />
             </div>
+            <h3>
+              拖拽图片 / 视频 / 音频至此处，或 <span>点击上传</span>
+            </h3>
+            <p>支持 JPG、PNG、WEBP、MP4、MOV、MP3、WAV，单个文件不超过 10MB</p>
+          </div>
+        </div>
+
+        {referenceMaterials.length > 0 ? (
+          <div className="reference-material-list">
+            {referenceMaterials.map((material) => (
+              <div className="reference-material-item" key={material.id}>
+                <div className="reference-material-icon">
+                  <i className={getReferenceTypeIcon(material.type)} />
+                </div>
+                <div className="reference-material-meta">
+                  <span className="reference-material-name">{material.name}</span>
+                  <span className="reference-material-type">
+                    {getReferenceTypeLabel(material.type)}
+                  </span>
+                </div>
+                <button
+                  className="reference-material-remove"
+                  type="button"
+                  title="删除素材"
+                  onClick={() => removeReferenceMaterial(material.id)}
+                >
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            ))}
           </div>
         ) : null}
+      </div>
+    );
+  }
+
+  function renderGeneratorForm() {
+    return (
+      <form onSubmit={isTextToVideo ? handleTextToVideoGenerate : handleOmniReferenceGenerate}>
+        {isOmniReference ? renderReferenceUploader() : null}
 
         <div className="form-group">
           <label className="form-label" htmlFor={`${activeSection}-prompt-input`}>
             <span>{currentCopy.promptLabel}</span>
             <span className="label-desc">{currentCopy.promptDescription}</span>
           </label>
-          <textarea
-            id={`${activeSection}-prompt-input`}
-            value={currentPrompt}
-            onChange={(event) => setPromptValue(event.target.value)}
-            placeholder={currentCopy.placeholder}
-            required
-          />
+          <div className="prompt-input-wrapper">
+            <textarea
+              id={`${activeSection}-prompt-input`}
+              value={currentPrompt}
+              onChange={(event) => setPromptValue(event.target.value)}
+              placeholder={currentCopy.placeholder}
+              required
+            />
+            {isOmniReference && showMentionPicker ? (
+              <div className="mention-menu">
+                {referenceMaterials.map((material) => (
+                  <button
+                    className="mention-option"
+                    key={material.id}
+                    type="button"
+                    onClick={() => insertMaterialMention(material)}
+                  >
+                    <i className={getReferenceTypeIcon(material.type)} />
+                    <span>{material.name}</span>
+                    <em>{getReferenceTypeLabel(material.type)}</em>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {isOmniReference && referencedMaterials.length > 0 ? (
+            <div className="referenced-chip-list">
+              {referencedMaterials.map((material) => (
+                <span className="referenced-chip" key={material.id}>
+                  <i className={getReferenceTypeIcon(material.type)} />
+                  {getMentionText(material.name)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="prompt-suggestions">
             {currentCopy.suggestions.map((suggestion) => (
               <button
@@ -402,8 +553,8 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
               >
-                <option value="seedance_2_0">Seedance 2.0 (精细画质 - 消耗 12 积分)</option>
-                <option value="seedance_2_0_fast">Seedance 2.0 Fast (速度优先 - 消耗 12 积分)</option>
+                <option value="seedance_2_0">Seedance 2.0 (720P画质)</option>
+                <option value="seedance_2_0_fast">Seedance 2.0 Fast (速度优先)</option>
               </select>
             </div>
           </div>
@@ -465,20 +616,20 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
           </div>
         </div>
 
-        {isImageToVideo && !hasEnoughCredits ? (
+        {isOmniReference && !hasEnoughCredits ? (
           <p className="insufficient-credit">积分不足，请联系管理员充值</p>
         ) : null}
-        {isImageToVideo && error ? <p className="error-message">{error}</p> : null}
+        {isOmniReference && error ? <p className="error-message">{error}</p> : null}
         {isTextToVideo && textError ? <p className="error-message">{textError}</p> : null}
         {isTextToVideo && textNotice ? <p className="success-message">{textNotice}</p> : null}
 
         <button
           className="submit-btn"
           type="submit"
-          disabled={isImageToVideo ? !hasEnoughCredits || isProcessing : false}
+          disabled={isOmniReference ? !hasEnoughCredits || isProcessing : false}
         >
           <span className="btn-text">
-            {isImageToVideo
+            {isOmniReference
               ? isProcessing
                 ? '生成中...'
                 : `立即生成视频，消耗 ${COST} 积分`
@@ -515,23 +666,23 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
             </div>
           ) : null}
 
-          {isImageToVideo && (status === 'idle' || status === 'failed') ? (
+          {isOmniReference && (status === 'idle' || status === 'failed') ? (
             <div className="preview-state state-idle">
               <div className="pulse-ring">
                 <i className="fa-solid fa-photo-film" />
               </div>
-              <h4>{status === 'failed' ? '生成未完成' : IMAGE_TO_VIDEO_COPY.idleTitle}</h4>
-              <p>{error || IMAGE_TO_VIDEO_COPY.idleDescription}</p>
+              <h4>{status === 'failed' ? '生成未完成' : OMNI_REFERENCE_COPY.idleTitle}</h4>
+              <p>{error || OMNI_REFERENCE_COPY.idleDescription}</p>
             </div>
           ) : null}
 
-          {isImageToVideo && status === 'processing' ? (
+          {isOmniReference && status === 'processing' ? (
             <div className="preview-state state-processing">
               <div className="loader-circle" />
               <div className="processing-steps">
                 <div className="step-item completed">
                   <span className="step-dot" />
-                  <span className="step-name">图片上传与任务扣费完成</span>
+                  <span className="step-name">素材上传与任务扣费完成</span>
                   <span className="step-percent">100%</span>
                 </div>
                 <div className="step-item completed">
@@ -551,7 +702,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
             </div>
           ) : null}
 
-          {isImageToVideo && status === 'success' ? (
+          {isOmniReference && status === 'success' ? (
             <div className="preview-state state-success">
               <div className="video-wrapper">
                 <video src={videoUrl} controls preload="auto" width="100%" />
@@ -599,8 +750,8 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
               type="button"
               onClick={() => switchSection('image-to-video')}
             >
-              <i className="fa-solid fa-image" />
-              <span>图生视频</span>
+              <i className="fa-solid fa-layer-group" />
+              <span>全能参考</span>
             </button>
             <button
               className={`nav-item ${activeSection === 'text-to-video' ? 'active' : ''}`}
@@ -675,7 +826,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
           </div>
         </header>
 
-        {isImageToVideo || isTextToVideo ? (
+        {isOmniReference || isTextToVideo ? (
           <section className="studio-panel">
             <div className="panel-card input-panel">{renderGeneratorForm()}</div>
             {renderPreviewPanel()}
@@ -695,7 +846,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
             </div>
 
             <div className="history-grid">
-              {generatedTasks.map((task) => (
+              {tasks.map((task) => (
                 <article className="history-card" key={task.id}>
                   <div className="card-thumbnail" onClick={() => openTask(task)}>
                     {task.imageUrl ? <img src={task.imageUrl} alt="Thumbnail" /> : null}
@@ -743,7 +894,7 @@ export default function VideoGenerator({ initialUser }: { initialUser: User }) {
               <div className="form-group">
                 <label className="form-label">
                   <span>积分扣费规则</span>
-                  <span className="label-desc">Seedance 2.0 固定消耗</span>
+                  <span className="label-desc">全能参考固定消耗</span>
                 </label>
                 <input value={`${COST} 积分 / 次`} disabled readOnly />
               </div>
