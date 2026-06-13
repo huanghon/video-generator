@@ -25,23 +25,33 @@ type VideoTaskStatusResult = {
 };
 
 const DEFAULT_PROVIDER_BASE_URL = 'https://api.loova.ai/api';
+const DEFAULT_IMAGE_PROVIDER_BASE_URL = 'https://loova.ai/loovaai-api';
 const MOCK_VIDEO_URL =
   'https://assets.mixkit.co/videos/preview/mixkit-cyberpunk-neon-city-streets-at-night-42289-large.mp4';
 const SUPPORTED_MODELS = new Set(['seedance_2_0', 'seedance_2_0_fast']);
 const SUPPORTED_RATIOS = new Set(['21:9', '16:9', '4:3', '1:1', '3:4', '9:16']);
 const SUPPORTED_FUNCTION_MODES = new Set(['first_last_frames', 'omni_reference']);
+const WEB_TASK_TYPES =
+  't2v,i2v,tl2v,v2v,cs2v,ref2v,m2v,cc2v,k2v,h2v,v2v_remove_element,v2v_add_element,v2v_change_bg,v2v_add_effect,v2v_style_transfer,v2v_character_style,v2v_hair_style,v2v_angle_control,v2v_upscale,product_ads_generator,viral_ads_clone_video';
 
 function shouldUseMock() {
   return process.env.VIDEO_PROVIDER_MOCK !== 'false';
 }
 
-function getProviderBaseUrl(credential: ApiKeyCredential) {
-  const baseUrl = credential.baseUrl || process.env.VIDEO_PROVIDER_BASE_URL || DEFAULT_PROVIDER_BASE_URL;
+function getProviderBaseUrl(credential: ApiKeyCredential, fallbackBaseUrl = DEFAULT_PROVIDER_BASE_URL) {
+  const baseUrl = credential.baseUrl || process.env.VIDEO_PROVIDER_BASE_URL || fallbackBaseUrl;
   return baseUrl.replace(/\/$/, '');
 }
 
 function normalizeModel(model?: string | null) {
   return model && SUPPORTED_MODELS.has(model) ? model : 'seedance_2_0';
+}
+
+function normalizeWebModel(model?: string | null) {
+  if (model === 'seedance_2_0_fast') return 'seedance2_0_fast';
+  if (model === 'seedance_2_0') return 'seedance2_0';
+  if (model === 'seedance2_0_fast' || model === 'seedance2_0') return model;
+  return 'seedance2_0';
 }
 
 function normalizeRatio(ratio?: string | null) {
@@ -71,6 +81,173 @@ function assertSuccessfulProviderResponse(responseData: any) {
   if (responseData?.code && responseData.code !== 200) {
     throw new Error(responseData.message || '视频供应商返回失败');
   }
+}
+
+function createWebMedia(url: string, type: 'image' | 'video') {
+  return {
+    file_type: type,
+    url,
+    name: url,
+    file_url: url,
+    file_key: url,
+    type,
+    duration: 0,
+    extra: {
+      duration: 0,
+      file_url: url,
+      file_key: url,
+      type
+    }
+  };
+}
+
+function findTaskRecord(value: unknown, taskId: string): any | null {
+  if (!value || typeof value !== 'object') return null;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findTaskRecord(item, taskId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const record = value as Record<string, any>;
+  if (
+    record.id === taskId ||
+    record.task_id === taskId ||
+    record.record_id === taskId ||
+    record.task_record_id === taskId
+  ) {
+    return record;
+  }
+
+  for (const item of Object.values(record)) {
+    const found = findTaskRecord(item, taskId);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function findVideoUrl(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findVideoUrl(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  const record = value as Record<string, any>;
+  const candidate =
+    record.video_url ||
+    record.videoUrl ||
+    record.output_url ||
+    record.outputUrl ||
+    record.url ||
+    record.file_url ||
+    record.fileUrl;
+
+  if (typeof candidate === 'string' && /^https?:\/\//.test(candidate)) {
+    return candidate;
+  }
+
+  for (const item of Object.values(record)) {
+    const found = findVideoUrl(item);
+    if (found) return found;
+  }
+
+  return undefined;
+}
+
+function mapWebTaskStatus(record: any): VideoTaskStatusResult['status'] {
+  const status = String(
+    record?.status ||
+      record?.task_status ||
+      record?.state ||
+      record?.generate_status ||
+      record?.progress_status ||
+      ''
+  ).toLowerCase();
+
+  if (
+    ['success', 'succeeded', 'complete', 'completed', 'finished', 'done'].includes(status) ||
+    Number(record?.status) === 2 ||
+    Number(record?.task_status) === 2
+  ) {
+    return 'success';
+  }
+
+  if (
+    ['failed', 'fail', 'error', 'canceled', 'cancelled'].includes(status) ||
+    Number(record?.status) === 3 ||
+    Number(record?.task_status) === 3
+  ) {
+    return 'failed';
+  }
+
+  return 'processing';
+}
+
+async function getWebTaskStatus(
+  apiTaskId: string,
+  credential: ApiKeyCredential
+): Promise<VideoTaskStatusResult> {
+  const response = await axios.get(
+    `${getProviderBaseUrl(credential, DEFAULT_IMAGE_PROVIDER_BASE_URL)}/task_records/list_paged`,
+    {
+      params: {
+        page_num: 1,
+        page_size: 20,
+        task_types: WEB_TASK_TYPES
+      },
+      headers: {
+        Authorization: `Bearer ${credential.apiKey}`,
+        Accept: 'application/json',
+        'x-app-id': process.env.VIDEO_PROVIDER_APP_ID || '52000'
+      }
+    }
+  );
+
+  assertSuccessfulProviderResponse(response.data);
+
+  const record = findTaskRecord(response.data, apiTaskId);
+  if (!record) {
+    return {
+      status: 'processing',
+      rawResponse: response.data
+    };
+  }
+
+  const status = mapWebTaskStatus(record);
+  if (status === 'success') {
+    return {
+      status,
+      videoUrl: findVideoUrl(record),
+      rawResponse: response.data
+    };
+  }
+
+  if (status === 'failed') {
+    return {
+      status,
+      errorMessage:
+        record?.error_message ||
+        record?.errorMessage ||
+        record?.message ||
+        record?.fail_reason ||
+        '视频生成失败',
+      rawResponse: response.data
+    };
+  }
+
+  return {
+    status: 'processing',
+    rawResponse: response.data
+  };
 }
 
 async function createSeedanceVideoTask(
@@ -128,15 +305,59 @@ export async function createImageToVideoTask(
       ? [params.imageUrl]
       : [];
 
-  return createSeedanceVideoTask(
-    {
-      ...params,
-      imageUrls,
-      audioUrls: params.audioUrls || [],
-      videoUrls: params.videoUrls || []
-    },
-    credential
-  );
+  if (shouldUseMock()) {
+    return {
+      apiTaskId: `mock_${Date.now()}`
+    };
+  }
+
+  try {
+    const mediaList = [
+      ...imageUrls.map((url) => createWebMedia(url, 'image')),
+      ...(params.videoUrls || []).map((url) => createWebMedia(url, 'video'))
+    ];
+
+    // TODO: The captured img2vid endpoint does not show audio reference handling;
+    // keep audio files uploaded in the app, but do not submit them until verified.
+    const response = await axios.post(
+      `${getProviderBaseUrl(credential, DEFAULT_IMAGE_PROVIDER_BASE_URL)}/videos/img2vid`,
+      {
+        v_model: normalizeWebModel(params.model),
+        out_number: 1,
+        pay_type: 'credit',
+        prompt: params.prompt,
+        is_ref: true,
+        image_keys: [],
+        media_list: mediaList,
+        video_keys: [],
+        audio_keys: [],
+        duration: normalizeDuration(params.duration),
+        aspect_ratio: normalizeRatio(params.aspectRatio)
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${credential.apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'x-app-id': process.env.VIDEO_PROVIDER_APP_ID || '52000'
+        }
+      }
+    );
+
+    assertSuccessfulProviderResponse(response.data);
+
+    const apiTaskId = response.data?.data?.task_id;
+    if (!apiTaskId) {
+      throw new Error('图生视频接口未返回 task_id');
+    }
+
+    return {
+      apiTaskId,
+      rawResponse: response.data
+    };
+  } catch (error) {
+    throw new Error(getProviderError(error));
+  }
 }
 
 export async function createTextToVideoTask(
@@ -156,7 +377,8 @@ export async function createTextToVideoTask(
 
 export async function getVideoTaskStatus(
   apiTaskId: string,
-  credential: ApiKeyCredential
+  credential: ApiKeyCredential,
+  options?: { taskType?: string | null }
 ): Promise<VideoTaskStatusResult> {
   if (apiTaskId.startsWith('mock_') || shouldUseMock()) {
     const createdAt = Number(apiTaskId.split('_')[1] || Date.now());
@@ -170,6 +392,13 @@ export async function getVideoTaskStatus(
   }
 
   try {
+    if (
+      options?.taskType === 'image-to-video' ||
+      getProviderBaseUrl(credential).includes('loovaai-api')
+    ) {
+      return getWebTaskStatus(apiTaskId, credential);
+    }
+
     const response = await axios.get(`${getProviderBaseUrl(credential)}/v1/tasks`, {
       params: { task_id: apiTaskId },
       headers: {

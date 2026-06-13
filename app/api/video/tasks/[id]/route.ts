@@ -54,6 +54,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         apiKeyAccountId: apiKeyAccount.id,
         apiKey: decryptApiKey(apiKeyAccount.apiKeyEncrypted),
         baseUrl: apiKeyAccount.baseUrl
+      }, {
+        taskType: task.taskType
       });
 
       if (providerStatus.status === 'success') {
@@ -85,7 +87,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         await releaseVideoTaskKeyIfNeeded(task.id);
       }
     } catch (error) {
-      return NextResponse.json({ message: getErrorMessage(error), task }, { status: 502 });
+      return NextResponse.json({ message: getErrorMessage(error), task: publicTask(task) }, { status: 502 });
     }
   }
 
